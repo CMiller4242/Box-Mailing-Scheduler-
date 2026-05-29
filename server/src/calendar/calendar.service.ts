@@ -9,7 +9,7 @@ export class CalendarService {
     const [campaigns, tasks] = await Promise.all([
       this.prisma.campaign.findMany({ select: { id: true, name: true, mailDate: true, status: true } }),
       this.prisma.task.findMany({
-        select: { id: true, title: true, dueDate: true, status: true, priority: true, campaignId: true },
+        select: { id: true, title: true, dueDate: true, status: true, priority: true, campaignId: true, ownerId: true },
         orderBy: { dueDate: 'asc' },
       }),
     ]);
@@ -32,6 +32,7 @@ export class CalendarService {
       campaignId: t.campaignId,
       status: t.status,
       priority: t.priority,
+      ownerId: t.ownerId,
     }));
 
     return [...campaignEvents, ...taskEvents];

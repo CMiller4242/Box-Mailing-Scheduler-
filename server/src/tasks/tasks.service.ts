@@ -10,7 +10,7 @@ export class TasksService {
   findAll(campaignId?: string) {
     return this.prisma.task.findMany({
       where: campaignId ? { campaignId } : undefined,
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, firstName: true, lastName: true, email: true } } },
       orderBy: { dueDate: 'asc' },
     });
   }
@@ -19,7 +19,7 @@ export class TasksService {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
-        owner: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, firstName: true, lastName: true, email: true } },
         alerts: { orderBy: { triggerDate: 'asc' } },
         activities: { orderBy: { createdAt: 'desc' } },
       },
@@ -32,7 +32,7 @@ export class TasksService {
     const { campaignId, ownerId, ...rest } = dto;
     const task = await this.prisma.task.create({
       data: { ...rest, campaign: { connect: { id: campaignId } }, ...(ownerId ? { owner: { connect: { id: ownerId } } } : {}) },
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, firstName: true, lastName: true, email: true } } },
     });
     await this.prisma.taskActivity.create({ data: { taskId: task.id, action: 'Task created' } });
     return task;
@@ -52,7 +52,7 @@ export class TasksService {
         ...(campaignId !== undefined ? { campaign: { connect: { id: campaignId } } } : {}),
         ...(ownerId !== undefined ? { owner: ownerId ? { connect: { id: ownerId } } : { disconnect: true } } : {}),
       },
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, firstName: true, lastName: true, email: true } } },
     });
 
     for (const action of actions) {

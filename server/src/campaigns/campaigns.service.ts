@@ -19,7 +19,7 @@ export class CampaignsService {
       where: { id },
       include: {
         tasks: {
-          include: { owner: { select: { id: true, name: true, email: true } } },
+          include: { owner: { select: { id: true, name: true, firstName: true, lastName: true, email: true } } },
           orderBy: { dueDate: 'asc' },
         },
       },
