@@ -40,14 +40,18 @@ export class TasksService {
 
   async update(id: string, dto: UpdateTaskDto) {
     const existing = await this.findOne(id);
-    const { ownerId, ...rest } = dto;
+    const { ownerId, campaignId, ...rest } = dto;
     const actions: string[] = [];
     if (dto.status && dto.status !== existing.status) actions.push(`Status changed to ${dto.status}`);
     if (dto.ownerId !== undefined && dto.ownerId !== existing.ownerId) actions.push(`Owner updated`);
 
     const task = await this.prisma.task.update({
       where: { id },
-      data: { ...rest, ...(ownerId !== undefined ? { owner: ownerId ? { connect: { id: ownerId } } : { disconnect: true } } : {}) },
+      data: {
+        ...rest,
+        ...(campaignId !== undefined ? { campaign: { connect: { id: campaignId } } } : {}),
+        ...(ownerId !== undefined ? { owner: ownerId ? { connect: { id: ownerId } } : { disconnect: true } } : {}),
+      },
       include: { owner: { select: { id: true, name: true, email: true } } },
     });
 
