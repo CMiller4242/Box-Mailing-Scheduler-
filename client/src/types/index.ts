@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'MEMBER';
+export type UserRole = 'ADMIN' | 'MANAGER' | 'EMPLOYEE' | 'MEMBER';
 export type CampaignStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 export type TaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -22,6 +22,7 @@ export interface AuthUser {
   lastName: string;
   email: string;
   role: UserRole;
+  managerId: string | null;
 }
 
 export interface Campaign {

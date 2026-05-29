@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('tasks')
 @Controller('tasks')
@@ -10,23 +11,33 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List tasks, optionally filter by campaignId' })
+  @ApiOperation({ summary: 'List tasks scoped by caller role' })
   @ApiQuery({ name: 'campaignId', required: false })
-  findAll(@Query('campaignId') campaignId?: string) { return this.tasksService.findAll(campaignId); }
+  findAll(@Query('campaignId') campaignId: string | undefined, @CurrentUser() user: any) {
+    return this.tasksService.findAll(campaignId, user);
+  }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a task with alerts and activity log' })
-  findOne(@Param('id') id: string) { return this.tasksService.findOne(id); }
+  @ApiOperation({ summary: 'Get a task (access-checked)' })
+  findOne(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.tasksService.findOne(id, user);
+  }
 
   @Post()
-  @ApiOperation({ summary: 'Create a task' })
-  create(@Body() dto: CreateTaskDto) { return this.tasksService.create(dto); }
+  @ApiOperation({ summary: 'Create a task (ADMIN + MANAGER only)' })
+  create(@Body() dto: CreateTaskDto, @CurrentUser() user: any) {
+    return this.tasksService.create(dto, user);
+  }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a task (status, owner, etc.)' })
-  update(@Param('id') id: string, @Body() dto: UpdateTaskDto) { return this.tasksService.update(id, dto); }
+  @ApiOperation({ summary: 'Update a task' })
+  update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: any) {
+    return this.tasksService.update(id, dto, user);
+  }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a task' })
-  remove(@Param('id') id: string) { return this.tasksService.remove(id); }
+  @ApiOperation({ summary: 'Delete a task (ADMIN + MANAGER only)' })
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.tasksService.remove(id, user);
+  }
 }

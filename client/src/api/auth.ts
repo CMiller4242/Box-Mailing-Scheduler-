@@ -14,6 +14,6 @@ export const authApi = {
     password: string;
   }) => client.post<AuthResponse>('/auth/register', data).then((r) => r.data),
 
-  login: (data: { email: string; password: string }) =>
+  login: (data: { email: string; password: string; rememberMe?: boolean }) =>
     client.post<AuthResponse>('/auth/login', data).then((r) => r.data),
 };

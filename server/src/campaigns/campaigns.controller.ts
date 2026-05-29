@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('campaigns')
 @Controller('campaigns')
@@ -14,8 +15,10 @@ export class CampaignsController {
   findAll() { return this.campaignsService.findAll(); }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a campaign with its tasks' })
-  findOne(@Param('id') id: string) { return this.campaignsService.findOne(id); }
+  @ApiOperation({ summary: 'Get a campaign with tasks scoped by caller role' })
+  findOne(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.campaignsService.findOne(id, user);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a campaign' })

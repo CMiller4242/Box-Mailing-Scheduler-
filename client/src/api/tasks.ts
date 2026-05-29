@@ -19,4 +19,5 @@ export const tasksApi = {
   create: (data: CreateTaskPayload) => client.post<Task>('/tasks', data).then((r) => r.data),
   update: (id: string, data: Partial<CreateTaskPayload>) =>
     client.patch<Task>(`/tasks/${id}`, data).then((r) => r.data),
+  remove: (id: string) => client.delete(`/tasks/${id}`).then((r) => r.data),
 };
