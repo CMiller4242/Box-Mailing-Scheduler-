@@ -39,23 +39,11 @@ export default function CalendarPage() {
         <div className="text-center py-20 text-gray-400">Loading calendar…</div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="mb-4 flex gap-4 text-xs flex-wrap">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: '#1e3a8a' }} />
-              Campaign mail date
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-red-600 inline-block" />
-              High priority task
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-amber-600 inline-block" />
-              Medium priority task
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-gray-500 inline-block" />
-              Low priority task
-            </span>
+          <div className="mb-4 flex gap-4 text-xs">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-brand-900 inline-block" /> Campaign mail date</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> High priority task</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-600 inline-block" /> Medium priority task</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-500 inline-block" /> Low priority task</span>
           </div>
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
