@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks     Task[]
+}
+
+model Campaign {
+  id        String         @id @default(uuid())
+  name      String
+  mailDate  DateTime
+  status    CampaignStatus @default(DRAFT)
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  tasks     Task[]
+}
+
+model Task {
+  id              String     @id @default(uuid())
+  campaignId      String
+  title           String
+  instructions    String?
+  ownerId         String?
+  dueDate         DateTime
+  status          TaskStatus @default(NOT_STARTED)
+  priority        Priority   @default(MEDIUM)
+  reminderDateTime DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  campaign    Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  owner       User?          @relation(fields: [ownerId], references: [id])
+  alerts      Alert[]
+  activities  TaskActivity[]
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  taskId      String
+  triggerDate DateTime
+  message     String
+  isFired     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskActivity {
+  id        String   @id @default(uuid())
+  taskId    String
+  action    String
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}

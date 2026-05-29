@@ -1,0 +1,14 @@
+{
+  "name": "box-mailing-scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "server": "npm run start:dev --workspace=server",
+    "client": "npm run dev --workspace=client",
+    "install:all": "npm install --prefix server && npm install --prefix client"
+  }
+}
