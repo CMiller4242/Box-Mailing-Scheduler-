@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { Task } from '../types';
-import { tasksApi } from '../api/tasks';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
 import TaskDetailModal from './TaskDetailModal';
@@ -19,7 +18,9 @@ export default function TaskCard({ task, onUpdated }: Props) {
   return (
     <>
       <div
-        className={`bg-white rounded-lg border p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${isOverdue ? 'border-red-300' : 'border-gray-200'}`}
+        className={`bg-white rounded-lg border p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${
+          isOverdue ? 'border-red-300' : 'border-gray-200'
+        }`}
         onClick={() => setOpen(true)}
       >
         <div className="flex items-start justify-between gap-2">
@@ -36,11 +37,15 @@ export default function TaskCard({ task, onUpdated }: Props) {
           <p className="mt-1 text-xs text-gray-400 truncate">👤 {task.owner.name}</p>
         )}
       </div>
+
       {open && (
         <TaskDetailModal
           task={task}
           onClose={() => setOpen(false)}
-          onUpdated={() => { onUpdated(); setOpen(false); }}
+          onUpdated={() => {
+            onUpdated();
+            setOpen(false);
+          }}
         />
       )}
     </>
