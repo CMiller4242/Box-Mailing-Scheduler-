@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Task } from '../types';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
-import TaskDetailModal from './TaskDetailModal';
+import TaskFormModal from './TaskFormModal';
 
 interface Props {
   task: Task;
@@ -18,7 +18,7 @@ export default function TaskCard({ task, onUpdated }: Props) {
   return (
     <>
       <div
-        className={`bg-white rounded-lg border p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${
+        className={`bg-white rounded-lg border p-3.5 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${
           isOverdue ? 'border-red-300' : 'border-gray-200'
         }`}
         onClick={() => setOpen(true)}
@@ -34,18 +34,18 @@ export default function TaskCard({ task, onUpdated }: Props) {
           </span>
         </div>
         {task.owner && (
-          <p className="mt-1 text-xs text-gray-400 truncate">👤 {task.owner.name}</p>
+          <p className="mt-1.5 text-xs text-gray-400 truncate">👤 {task.owner.name}</p>
+        )}
+        {task.instructions && (
+          <p className="mt-1.5 text-xs text-gray-400 line-clamp-1 italic">{task.instructions}</p>
         )}
       </div>
 
       {open && (
-        <TaskDetailModal
+        <TaskFormModal
           task={task}
           onClose={() => setOpen(false)}
-          onUpdated={() => {
-            onUpdated();
-            setOpen(false);
-          }}
+          onSaved={() => { onUpdated(); setOpen(false); }}
         />
       )}
     </>
