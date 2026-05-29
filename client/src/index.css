@@ -7,3 +7,19 @@
     @apply bg-gray-50 text-gray-900 antialiased;
   }
 }
+
+/* FullCalendar — interactive day cell hover */
+.fc .fc-daygrid-day {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.fc .fc-daygrid-day:hover {
+  background-color: rgba(59, 130, 246, 0.04); /* blue-500 at ~4% */
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15);
+}
+
+/* Keep today's highlight intact on hover */
+.fc .fc-daygrid-day.fc-day-today:hover {
+  background-color: rgba(254, 243, 199, 0.8); /* amber-100 tint, FullCalendar's today default */
+}
