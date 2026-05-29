@@ -6,6 +6,7 @@ import type { DateClickArg } from '@fullcalendar/interaction';
 import type { EventClickArg } from '@fullcalendar/core';
 import { calendarApi } from '../api/calendar';
 import { tasksApi } from '../api/tasks';
+import { useAuth } from '../context/AuthContext';
 import type { CalendarEvent, Task } from '../types';
 import TaskFormModal from '../components/TaskFormModal';
 
@@ -33,11 +34,13 @@ type ModalState =
   | { mode: 'edit'; task: Task };
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [fetchingTask, setFetchingTask] = useState(false);
+  const [assignedToMe, setAssignedToMe] = useState(false);
 
   const loadEvents = useCallback(() => {
     return calendarApi
@@ -51,24 +54,21 @@ export default function CalendarPage() {
   }, [loadEvents]);
 
   const handleDateClick = (arg: DateClickArg) => {
-    // Find the first campaign to associate new tasks with. If multiple
-    // campaigns exist the user can change it inside TaskFormModal in a future
-    // iteration — for now we pick the first active one.
     const activeCampaign = events.find((e) => e.type === 'campaign');
-    if (!activeCampaign) return; // no campaigns yet — nothing to attach to
+    if (!activeCampaign) return;
     setModal({ mode: 'create', date: arg.dateStr, campaignId: activeCampaign.resourceId });
   };
 
   const handleEventClick = async (arg: EventClickArg) => {
     const calEvent = arg.event.extendedProps as CalendarEvent;
-    if (calEvent.type === 'campaign') return; // campaigns are not editable here
+    if (calEvent.type === 'campaign') return;
 
     setFetchingTask(true);
     try {
       const task = await tasksApi.get(calEvent.resourceId);
       setModal({ mode: 'edit', task });
     } catch {
-      // silently ignore — task may have been deleted
+      // task may have been deleted
     } finally {
       setFetchingTask(false);
     }
@@ -79,26 +79,41 @@ export default function CalendarPage() {
     loadEvents();
   };
 
-  const fcEvents = events.map((e) => ({
+  const visibleEvents = assignedToMe && user
+    ? events.filter((e) => e.type === 'campaign' || (e.ownerId === user.id && e.status !== 'COMPLETED'))
+    : events;
+
+  const fcEvents = visibleEvents.map((e) => ({
     id: e.id,
     title: e.title,
     date: e.date.split('T')[0],
     backgroundColor: eventColor(e),
     borderColor: eventColor(e),
     extendedProps: e,
-    cursor: e.type === 'task' ? 'pointer' : 'default',
   }));
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Calendar</h1>
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+        <button
+          onClick={() => setAssignedToMe((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+            assignedToMe
+              ? 'bg-blue-50 border-blue-300 text-blue-700'
+              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          <span className="text-base leading-none">{assignedToMe ? '✓' : '○'}</span>
+          Assigned to me
+        </button>
+      </div>
 
       {loading && <div className="text-center py-20 text-gray-400">Loading calendar…</div>}
       {error && <div className="text-center py-20 text-red-400">Failed to load events: {error}</div>}
 
       {!loading && !error && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          {/* Legend + hint */}
           <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
             <div className="flex gap-5 text-xs flex-wrap">
               {LEGEND.map(({ label, color }) => (
@@ -120,8 +135,10 @@ export default function CalendarPage() {
             <div className="text-center text-sm text-gray-400 py-2">Loading task…</div>
           )}
 
-          {events.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">No events to display.</div>
+          {fcEvents.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              {assignedToMe ? 'No open tasks assigned to you.' : 'No events to display.'}
+            </div>
           ) : (
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin]}
@@ -142,7 +159,6 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Task form modal */}
       {modal?.mode === 'create' && (
         <TaskFormModal
           campaignId={modal.campaignId}

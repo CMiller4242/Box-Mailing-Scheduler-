@@ -6,10 +6,22 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 export interface User {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Minimal shape stored in AuthContext after login/register */
+export interface AuthUser {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
 }
 
 export interface Campaign {
@@ -28,7 +40,7 @@ export interface Task {
   campaignId: string;
   title: string;
   instructions?: string;
-  owner?: Pick<User, 'id' | 'name' | 'email'>;
+  owner?: Pick<User, 'id' | 'name' | 'firstName' | 'lastName' | 'email'>;
   ownerId?: string;
   dueDate: string;
   status: TaskStatus;
@@ -51,4 +63,5 @@ export interface CalendarEvent {
   status: string;
   priority?: Priority;
   campaignId?: string;
+  ownerId?: string;
 }
