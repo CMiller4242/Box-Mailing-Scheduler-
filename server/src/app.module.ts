@@ -9,6 +9,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
   controllers: [AppController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
