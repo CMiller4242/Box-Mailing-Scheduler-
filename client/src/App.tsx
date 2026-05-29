@@ -1,19 +1,37 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useRole } from './hooks/useRole';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import Dashboard from './pages/Dashboard';
 import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import AdminUsersPage from './pages/AdminUsersPage';
 
 function AppShell() {
   const { user, logout } = useAuth();
+  const { isAdmin } = useRole();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
   };
+
+  const navLink = (to: string, label: string, end = false) => (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        isActive
+          ? 'text-white border-b-2 border-blue-400 pb-0.5'
+          : 'text-slate-300 hover:text-white transition-colors'
+      }
+    >
+      {label}
+    </NavLink>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -23,32 +41,17 @@ function AppShell() {
             <span className="font-bold text-lg tracking-tight">📬 Box Mailing Scheduler</span>
 
             <nav className="flex items-center gap-6 text-sm font-medium">
-              <NavLink
-                to="/"
-                end
-                className={({ isActive }) =>
-                  isActive
-                    ? 'text-white border-b-2 border-blue-400 pb-0.5'
-                    : 'text-slate-300 hover:text-white transition-colors'
-                }
-              >
-                Dashboard
-              </NavLink>
-              <NavLink
-                to="/calendar"
-                className={({ isActive }) =>
-                  isActive
-                    ? 'text-white border-b-2 border-blue-400 pb-0.5'
-                    : 'text-slate-300 hover:text-white transition-colors'
-                }
-              >
-                Calendar
-              </NavLink>
+              {navLink('/', 'Dashboard', true)}
+              {navLink('/calendar', 'Calendar')}
+              {isAdmin && navLink('/admin/users', 'Users')}
 
               {/* User menu */}
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-700">
                 <span className="text-slate-300 text-xs">
                   {user.firstName} {user.lastName}
+                  {isAdmin && (
+                    <span className="ml-1.5 text-purple-400 font-semibold">ADMIN</span>
+                  )}
                 </span>
                 <button
                   onClick={handleLogout}
@@ -68,17 +71,19 @@ function AppShell() {
           <Route path="/register" element={<RegisterPage />} />
           <Route
             path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
           />
           <Route
             path="/calendar"
+            element={<ProtectedRoute><CalendarPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/users"
             element={
               <ProtectedRoute>
-                <CalendarPage />
+                <AdminRoute>
+                  <AdminUsersPage />
+                </AdminRoute>
               </ProtectedRoute>
             }
           />
