@@ -10,6 +10,7 @@ const SAFE_SELECT = {
   lastName: true,
   email: true,
   role: true,
+  managerId: true,
   createdAt: true,
   updatedAt: true,
 };
@@ -46,5 +47,13 @@ export class UsersService {
 
   findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async getReportIds(managerId: string): Promise<string[]> {
+    const reports = await this.prisma.user.findMany({
+      where: { managerId },
+      select: { id: true },
+    });
+    return reports.map((r) => r.id);
   }
 }

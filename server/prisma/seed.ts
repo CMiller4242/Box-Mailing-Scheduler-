@@ -9,14 +9,15 @@ async function main() {
   await prisma.campaign.deleteMany();
   await prisma.user.deleteMany();
 
+  // Alice is ADMIN, Bob is MANAGER, Carol reports to Bob as EMPLOYEE
   const alice = await prisma.user.create({
     data: { name: 'Alice Johnson', firstName: 'Alice', lastName: 'Johnson', email: 'alice@positivepromotions.com', role: UserRole.ADMIN },
   });
   const bob = await prisma.user.create({
-    data: { name: 'Bob Martinez', firstName: 'Bob', lastName: 'Martinez', email: 'bob@positivepromotions.com', role: UserRole.MEMBER },
+    data: { name: 'Bob Martinez', firstName: 'Bob', lastName: 'Martinez', email: 'bob@positivepromotions.com', role: UserRole.MANAGER },
   });
   const carol = await prisma.user.create({
-    data: { name: 'Carol Lee', firstName: 'Carol', lastName: 'Lee', email: 'carol@positivepromotions.com', role: UserRole.MEMBER },
+    data: { name: 'Carol Lee', firstName: 'Carol', lastName: 'Lee', email: 'carol@positivepromotions.com', role: UserRole.EMPLOYEE, managerId: bob.id },
   });
 
   const mailDate = new Date('2026-07-15T00:00:00.000Z');

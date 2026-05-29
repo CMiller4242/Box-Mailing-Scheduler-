@@ -1,10 +1,26 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import type { AuthUser } from '../types';
+
+const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'auth_user';
+
+/** Read from localStorage first (rememberMe), then sessionStorage (tab session). */
+function readStored(): { user: AuthUser | null; token: string | null } {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+    const raw = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
+    if (token && raw) return { token, user: JSON.parse(raw) as AuthUser };
+  } catch {
+    // corrupted storage — ignore
+  }
+  return { user: null, token: null };
+}
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
-  setAuth: (user: AuthUser, token: string) => void;
+  /** persist=true → localStorage (rememberMe), persist=false → sessionStorage */
+  setAuth: (user: AuthUser, token: string, persist: boolean) => void;
   logout: () => void;
 }
 
@@ -16,26 +32,23 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const raw = localStorage.getItem('auth_user');
-      return raw ? (JSON.parse(raw) as AuthUser) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
+  const initial = readStored();
+  const [user, setUser] = useState<AuthUser | null>(initial.user);
+  const [token, setToken] = useState<string | null>(initial.token);
 
-  const setAuth = useCallback((newUser: AuthUser, newToken: string) => {
-    localStorage.setItem('auth_token', newToken);
-    localStorage.setItem('auth_user', JSON.stringify(newUser));
+  const setAuth = useCallback((newUser: AuthUser, newToken: string, persist: boolean) => {
+    const store = persist ? localStorage : sessionStorage;
+    store.setItem(TOKEN_KEY, newToken);
+    store.setItem(USER_KEY, JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
   }, []);

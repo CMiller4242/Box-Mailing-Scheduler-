@@ -22,16 +22,10 @@ export class AuthService {
     const name = `${dto.firstName} ${dto.lastName}`;
 
     const user = await this.prisma.user.create({
-      data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        name,
-        email: dto.email,
-        passwordHash,
-      },
+      data: { firstName: dto.firstName, lastName: dto.lastName, name, email: dto.email, passwordHash },
     });
 
-    return { token: this.issueToken(user), user: this.safeUser(user) };
+    return { token: this.issueToken(user, false), user: this.safeUser(user) };
   }
 
   async login(dto: LoginDto) {
@@ -41,15 +35,19 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid email or password');
 
-    return { token: this.issueToken(user), user: this.safeUser(user) };
+    return { token: this.issueToken(user, dto.rememberMe ?? false), user: this.safeUser(user) };
   }
 
-  private issueToken(user: { id: string; email: string; role: string }) {
-    return this.jwt.sign({ sub: user.id, email: user.email, role: user.role });
+  private issueToken(user: { id: string; email: string; role: string }, rememberMe: boolean) {
+    const expiresIn = rememberMe ? '7d' : (process.env.JWT_EXPIRES_IN ?? '8h');
+    return this.jwt.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn });
   }
 
-  private safeUser(user: { id: string; name: string; firstName: string; lastName: string; email: string; role: string }) {
-    const { id, name, firstName, lastName, email, role } = user;
-    return { id, name, firstName, lastName, email, role };
+  private safeUser(user: {
+    id: string; name: string; firstName: string; lastName: string;
+    email: string; role: string; managerId?: string | null;
+  }) {
+    const { id, name, firstName, lastName, email, role, managerId } = user;
+    return { id, name, firstName, lastName, email, role, managerId: managerId ?? null };
   }
 }
