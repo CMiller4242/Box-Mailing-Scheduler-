@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Task, TaskStatus, Priority } from '../types';
 import { tasksApi } from '../api/tasks';
 import { useUsers } from '../hooks/useUsers';
+import { useRole } from '../hooks/useRole';
 
 interface Props {
   /** Present → edit mode. Absent → create mode. */
@@ -33,7 +34,8 @@ function toDateInput(iso: string) {
 export default function TaskFormModal({ task, campaignId, defaultDate, onClose, onSaved }: Props) {
   const isEdit = !!task;
   const users = useUsers();
-  const firstRef = useRef<HTMLInputElement>(null);
+  const firstRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+  const { canEditFullTask, isEmployee } = useRole();
 
   const [title, setTitle] = useState(task?.title ?? '');
   const [dueDate, setDueDate] = useState(task ? toDateInput(task.dueDate) : (defaultDate ?? ''));
@@ -44,9 +46,11 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { firstRef.current?.focus(); }, []);
+  // Employees editing: can update ownerId only when marking as COMPLETED
+  const employeeCanChangeOwner = isEmployee && isEdit && status === 'COMPLETED';
 
-  // Close on Escape
+  useEffect(() => { (firstRef.current as HTMLElement | null)?.focus(); }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -68,19 +72,30 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        title: title.trim(),
-        dueDate: new Date(dueDate).toISOString(),
-        status,
-        priority,
-        ownerId: ownerId || undefined,
-        instructions: instructions.trim() || undefined,
-      };
-
-      if (isEdit) {
+      if (isEmployee && isEdit) {
+        // Employees: only allowed to update status, instructions, and ownerId on completion
+        const payload: Record<string, unknown> = { status, instructions: instructions.trim() || undefined };
+        if (employeeCanChangeOwner) payload.ownerId = ownerId || undefined;
         await tasksApi.update(task!.id, payload);
+      } else if (isEdit) {
+        await tasksApi.update(task!.id, {
+          title: title.trim(),
+          dueDate: new Date(dueDate).toISOString(),
+          status,
+          priority,
+          ownerId: ownerId || undefined,
+          instructions: instructions.trim() || undefined,
+        });
       } else {
-        await tasksApi.create({ campaignId: campaignId!, ...payload });
+        await tasksApi.create({
+          campaignId: campaignId!,
+          title: title.trim(),
+          dueDate: new Date(dueDate).toISOString(),
+          status,
+          priority,
+          ownerId: ownerId || undefined,
+          instructions: instructions.trim() || undefined,
+        });
       }
       onSaved();
     } catch (e: unknown) {
@@ -89,6 +104,9 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
       setSaving(false);
     }
   };
+
+  const readonlyInput = 'w-full border border-gray-200 bg-gray-50 rounded-md px-3 py-2 text-sm text-gray-500 cursor-not-allowed';
+  const editableInput = 'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 
   return (
     <div
@@ -120,15 +138,16 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
             {/* Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Title <span className="text-red-400">*</span>
+                Title {canEditFullTask && <span className="text-red-400">*</span>}
               </label>
               <input
-                ref={firstRef}
+                ref={canEditFullTask ? firstRef as React.RefObject<HTMLInputElement> : undefined}
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="What needs to happen?"
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={canEditFullTask ? editableInput : readonlyInput}
+                readOnly={!canEditFullTask}
               />
             </div>
 
@@ -136,13 +155,14 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Due Date <span className="text-red-400">*</span>
+                  Due Date {canEditFullTask && <span className="text-red-400">*</span>}
                 </label>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={canEditFullTask ? editableInput : readonlyInput}
+                  readOnly={!canEditFullTask}
                 />
               </div>
               <div>
@@ -150,7 +170,8 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
                 <select
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as Priority)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={canEditFullTask ? editableInput : readonlyInput}
+                  disabled={!canEditFullTask}
                 >
                   {PRIORITY_OPTIONS.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
@@ -164,9 +185,10 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
+                  ref={isEmployee ? firstRef as React.RefObject<HTMLSelectElement> : undefined}
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={editableInput}
                 >
                   {STATUS_OPTIONS.map(({ value, label }) => (
                     <option key={value} value={value}>{label}</option>
@@ -178,13 +200,17 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
                 <select
                   value={ownerId}
                   onChange={(e) => setOwnerId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={(canEditFullTask || employeeCanChangeOwner) ? editableInput : readonlyInput}
+                  disabled={!(canEditFullTask || employeeCanChangeOwner)}
                 >
                   <option value="">— Unassigned —</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
+                {isEmployee && isEdit && status !== 'COMPLETED' && (
+                  <p className="mt-1 text-xs text-gray-400">Assignee editable when marking complete.</p>
+                )}
               </div>
             </div>
 

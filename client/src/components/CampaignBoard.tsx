@@ -3,6 +3,7 @@ import type { CampaignWithTasks, TaskStatus } from '../types';
 import TaskCard from './TaskCard';
 import StatusBadge from './StatusBadge';
 import TaskFormModal from './TaskFormModal';
+import { useRole } from '../hooks/useRole';
 
 interface Props {
   campaign: CampaignWithTasks;
@@ -44,6 +45,7 @@ const COLUMNS: Column[] = [
 export default function CampaignBoard({ campaign, onTaskUpdated }: Props) {
   const mailDate = new Date(campaign.mailDate);
   const [creating, setCreating] = useState<TaskStatus | null>(null);
+  const { canCreateTask } = useRole();
 
   return (
     <div className="mb-8">
@@ -84,13 +86,15 @@ export default function CampaignBoard({ campaign, onTaskUpdated }: Props) {
                 )}
               </div>
 
-              {/* Add task button */}
-              <button
-                onClick={() => setCreating(status)}
-                className="mt-3 w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-white/70 rounded-lg py-1.5 transition-colors border border-dashed border-gray-300 hover:border-blue-300"
-              >
-                + Add task
-              </button>
+              {/* Add task button — hidden for EMPLOYEE */}
+              {canCreateTask && (
+                <button
+                  onClick={() => setCreating(status)}
+                  className="mt-3 w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-white/70 rounded-lg py-1.5 transition-colors border border-dashed border-gray-300 hover:border-blue-300"
+                >
+                  + Add task
+                </button>
+              )}
             </div>
           );
         })}
