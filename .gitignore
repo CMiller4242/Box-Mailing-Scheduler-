@@ -14,7 +14,7 @@ server/.env
 client/.env
 
 # Prisma
-server/prisma/migrations/
+# migrations are intentionally tracked in git (source of truth for schema history)
 
 # Logs
 *.log
