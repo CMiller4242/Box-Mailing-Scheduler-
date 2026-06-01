@@ -5,4 +5,6 @@ export const usersApi = {
   list: () => client.get<User[]>('/users').then((r) => r.data),
   updateRole: (id: string, role: UserRole) =>
     client.patch<User>(`/users/${id}/role`, { role }).then((r) => r.data),
+  deleteUser: (id: string) =>
+    client.delete<{ id: string }>(`/users/${id}`).then((r) => r.data),
 };
