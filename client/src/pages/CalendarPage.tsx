@@ -3,31 +3,52 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { DateClickArg } from '@fullcalendar/interaction';
-import type { EventClickArg } from '@fullcalendar/core';
+import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
 import { calendarApi } from '../api/calendar';
 import { tasksApi } from '../api/tasks';
 import { useAuth } from '../context/AuthContext';
 import type { CalendarEvent, Task } from '../types';
 import TaskFormModal from '../components/TaskFormModal';
 
-const PRIORITY_COLOR: Record<string, string> = {
-  HIGH: '#dc2626',
-  MEDIUM: '#d97706',
-  LOW: '#6b7280',
+// ── Calmer, product-grade color tokens ───────────────────────────────────────
+const CHIP_STYLES: Record<string, { stripe: string; bg: string; text: string }> = {
+  HIGH:     { stripe: '#f87171', bg: '#fef2f2', text: '#991b1b' }, // red-400 / red-50 / red-800
+  MEDIUM:   { stripe: '#fbbf24', bg: '#fffbeb', text: '#92400e' }, // amber-400 / amber-50 / amber-800
+  LOW:      { stripe: '#94a3b8', bg: '#f1f5f9', text: '#475569' }, // slate-400 / slate-100 / slate-600
+  CAMPAIGN: { stripe: '#60a5fa', bg: '#eff6ff', text: '#1e40af' }, // blue-400 / blue-50 / blue-800
 };
-const CAMPAIGN_COLOR = '#1e3a8a';
 
-function eventColor(event: CalendarEvent): string {
-  if (event.type === 'campaign') return CAMPAIGN_COLOR;
-  return PRIORITY_COLOR[event.priority ?? 'LOW'] ?? PRIORITY_COLOR.LOW;
+function chipStyle(event: CalendarEvent) {
+  if (event.type === 'campaign') return CHIP_STYLES.CAMPAIGN;
+  return CHIP_STYLES[event.priority ?? 'LOW'] ?? CHIP_STYLES.LOW;
 }
 
 const LEGEND = [
-  { label: 'Campaign mail date', color: CAMPAIGN_COLOR },
-  { label: 'High priority task', color: PRIORITY_COLOR.HIGH },
-  { label: 'Medium priority task', color: PRIORITY_COLOR.MEDIUM },
-  { label: 'Low priority task', color: PRIORITY_COLOR.LOW },
+  { label: 'Campaign mail date', ...CHIP_STYLES.CAMPAIGN },
+  { label: 'High priority',      ...CHIP_STYLES.HIGH     },
+  { label: 'Medium priority',    ...CHIP_STYLES.MEDIUM   },
+  { label: 'Low priority',       ...CHIP_STYLES.LOW      },
 ];
+
+// ── Custom chip renderer (used by eventContent) ───────────────────────────────
+function EventChip({ arg }: { arg: EventContentArg }) {
+  const calEvent = arg.event.extendedProps as CalendarEvent;
+  const { stripe, bg, text } = chipStyle(calEvent);
+
+  return (
+    <div
+      title={arg.event.title}
+      style={{
+        borderLeftColor: stripe,
+        backgroundColor: bg,
+        color: text,
+      }}
+      className="cal-chip"
+    >
+      <span className="cal-chip-title">{arg.event.title}</span>
+    </div>
+  );
+}
 
 type ModalState =
   | { mode: 'create'; date: string; campaignId: string }
@@ -83,12 +104,14 @@ export default function CalendarPage() {
     ? events.filter((e) => e.type === 'campaign' || (e.ownerId === user.id && e.status !== 'COMPLETED'))
     : events;
 
+  // Transparent background/border — all visual styling lives in EventChip
   const fcEvents = visibleEvents.map((e) => ({
     id: e.id,
     title: e.title,
     date: e.date.split('T')[0],
-    backgroundColor: eventColor(e),
-    borderColor: eventColor(e),
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    textColor: 'transparent',
     extendedProps: e,
   }));
 
@@ -114,15 +137,16 @@ export default function CalendarPage() {
 
       {!loading && !error && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          {/* Legend */}
           <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex gap-5 text-xs flex-wrap">
-              {LEGEND.map(({ label, color }) => (
+            <div className="flex gap-4 text-xs flex-wrap">
+              {LEGEND.map(({ label, stripe }) => (
                 <span key={label} className="flex items-center gap-1.5">
                   <span
-                    className="w-3 h-3 rounded-full inline-block flex-shrink-0"
-                    style={{ backgroundColor: color }}
+                    className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: stripe }}
                   />
-                  {label}
+                  <span className="text-gray-500">{label}</span>
                 </span>
               ))}
             </div>
@@ -154,6 +178,8 @@ export default function CalendarPage() {
               height="auto"
               eventDisplay="block"
               eventCursor="pointer"
+              dayMaxEvents={2}
+              eventContent={(arg) => <EventChip arg={arg} />}
             />
           )}
         </div>
