@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { Task } from '../types';
 import StatusBadge from './StatusBadge';
 import PriorityBadge from './PriorityBadge';
 import TaskFormModal from './TaskFormModal';
+import ConfirmDialog from './ConfirmDialog';
 import { useRole } from '../hooks/useRole';
 import { tasksApi } from '../api/tasks';
 
@@ -12,23 +14,29 @@ interface Props {
 }
 
 export default function TaskCard({ task, onUpdated }: Props) {
-  const [open, setOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [open, setOpen]           = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting]   = useState(false);
   const { canDeleteTask } = useRole();
 
-  const dueDate = new Date(task.dueDate);
+  const dueDate  = new Date(task.dueDate);
   const isOverdue = dueDate < new Date() && task.status !== 'COMPLETED';
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+    setConfirming(true);
+  };
+
+  const handleConfirm = async () => {
     setDeleting(true);
     try {
       await tasksApi.remove(task.id);
+      toast.success('Task deleted');
       onUpdated();
     } catch {
-      alert('Failed to delete task. Please try again.');
+      toast.error('Failed to delete task. Please try again.');
       setDeleting(false);
+      setConfirming(false);
     }
   };
 
@@ -47,7 +55,7 @@ export default function TaskCard({ task, onUpdated }: Props) {
             {canDeleteTask && (
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 disabled={deleting}
                 className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
                 aria-label="Delete task"
@@ -60,6 +68,7 @@ export default function TaskCard({ task, onUpdated }: Props) {
             )}
           </div>
         </div>
+
         <div className="mt-2 flex items-center gap-2 flex-wrap">
           <StatusBadge status={task.status} />
           <span className={`text-xs ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
@@ -81,6 +90,16 @@ export default function TaskCard({ task, onUpdated }: Props) {
           onSaved={() => { onUpdated(); setOpen(false); }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirming}
+        title="Delete task?"
+        description={`"${task.title}" will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete task"
+        loading={deleting}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirming(false)}
+      />
     </>
   );
 }

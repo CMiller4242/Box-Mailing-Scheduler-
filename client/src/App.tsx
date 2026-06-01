@@ -1,4 +1,5 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useRole } from './hooks/useRole';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -96,6 +97,7 @@ function AppShell() {
 export default function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-center" richColors />
       <AppShell />
     </AuthProvider>
   );
