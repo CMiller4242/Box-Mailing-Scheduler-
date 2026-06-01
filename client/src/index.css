@@ -8,18 +8,152 @@
   }
 }
 
-/* FullCalendar — interactive day cell hover */
+/* ── Day cell hover (month view) ─────────────────────────────────────────── */
 .fc .fc-daygrid-day {
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.12s ease;
   cursor: pointer;
 }
 
 .fc .fc-daygrid-day:hover {
-  background-color: rgba(59, 130, 246, 0.04); /* blue-500 at ~4% */
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15);
+  background-color: rgba(59, 130, 246, 0.035);
 }
 
-/* Keep today's highlight intact on hover */
-.fc .fc-daygrid-day.fc-day-today:hover {
-  background-color: rgba(254, 243, 199, 0.8); /* amber-100 tint, FullCalendar's today default */
+/* ── Today cell: subtle warm highlight, stronger date number ─────────────── */
+.fc .fc-day-today {
+  background-color: rgba(254, 243, 199, 0.55) !important; /* amber-100 @55% */
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+  font-weight: 700;
+  color: #1d4ed8; /* blue-700 */
+  background: #eff6ff; /* blue-50 */
+  border-radius: 9999px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ── Event wrapper — strip FullCalendar's default chrome ─────────────────── */
+/* We handle all visual styling inside .cal-chip */
+.fc .fc-daygrid-event {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 3px 2px !important;
+  padding: 0 !important;
+  border-radius: 4px;
+}
+
+.fc .fc-daygrid-event:focus,
+.fc .fc-daygrid-event:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
+  border-radius: 4px;
+}
+
+/* The fc-event-main wrapper also needs clearing */
+.fc .fc-event-main {
+  padding: 0;
+  overflow: visible;
+}
+
+/* ── Custom chip ─────────────────────────────────────────────────────────── */
+.cal-chip {
+  display: flex;
+  align-items: center;
+  border-left: 3px solid;           /* color set via inline style */
+  border-radius: 3px;
+  padding: 2px 5px 2px 4px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  transition: filter 0.1s ease;
+  cursor: pointer;
+}
+
+.cal-chip:hover {
+  filter: brightness(0.95);
+}
+
+.cal-chip-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+/* ── "+N more" overflow link ─────────────────────────────────────────────── */
+.fc .fc-daygrid-more-link {
+  font-size: 10px;
+  font-weight: 500;
+  color: #64748b;       /* slate-500 */
+  padding: 1px 3px 0;
+  border-radius: 3px;
+  line-height: 1.5;
+  display: inline-block;
+  transition: color 0.1s ease, background-color 0.1s ease;
+}
+
+.fc .fc-daygrid-more-link:hover {
+  color: #1d4ed8;       /* blue-700 */
+  background-color: #eff6ff; /* blue-50 */
+}
+
+/* ── Day number typography ───────────────────────────────────────────────── */
+.fc .fc-daygrid-day-number {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;       /* gray-700 */
+  padding: 4px 6px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;       /* gray-500 */
+  text-decoration: none;
+}
+
+/* ── Toolbar buttons ─────────────────────────────────────────────────────── */
+.fc .fc-button {
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.fc .fc-button-primary {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.fc .fc-button-primary:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+/* ── Week view: tighten up event chips the same way ─────────────────────── */
+.fc .fc-timegrid-event .fc-event-main {
+  padding: 2px 4px;
 }
