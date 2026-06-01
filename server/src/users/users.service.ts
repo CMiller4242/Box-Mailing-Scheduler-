@@ -41,9 +41,28 @@ export class UsersService {
     return this.prisma.user.update({ where: { id }, data: dto, select: SAFE_SELECT });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
-    return this.prisma.user.delete({ where: { id } });
+  async remove(targetId: string, callerId: string) {
+    if (targetId === callerId) {
+      throw new ForbiddenException('You cannot delete your own account.');
+    }
+    await this.findOne(targetId); // 404 if not found
+
+    // Null out FK references that have no cascade, so the delete can proceed cleanly:
+    //   • tasks owned by this user → ownerId = null
+    //   • users who report to this user → managerId = null
+    await this.prisma.$transaction([
+      this.prisma.task.updateMany({
+        where: { ownerId: targetId },
+        data: { ownerId: null },
+      }),
+      this.prisma.user.updateMany({
+        where: { managerId: targetId },
+        data: { managerId: null },
+      }),
+      this.prisma.user.delete({ where: { id: targetId } }),
+    ]);
+
+    return { id: targetId };
   }
 
   findByEmail(email: string) {

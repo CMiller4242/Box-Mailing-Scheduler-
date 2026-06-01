@@ -40,6 +40,9 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a user' })
-  remove(@Param('id') id: string) { return this.usersService.remove(id); }
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Delete a user (ADMIN only)' })
+  remove(@Param('id') id: string, @CurrentUser() caller: any) {
+    return this.usersService.remove(id, caller.id);
+  }
 }
