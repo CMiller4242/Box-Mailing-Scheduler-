@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -45,6 +46,7 @@ export class CampaignsController {
   update(@Param('id') id: string, @Body() dto: UpdateCampaignDto) { return this.campaignsService.update(id, dto); }
 
   @Delete(':id')
+  @Roles('ADMIN', 'MANAGER')
   @ApiOperation({ summary: 'Delete a campaign' })
   remove(@Param('id') id: string) { return this.campaignsService.remove(id); }
 }
