@@ -12,10 +12,22 @@ import { tasksApi } from '../api/tasks';
 
 const STATUS_ORDER: TaskStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'];
 
+// Soft accent palette — 8 distinct tints, professional and restrained
+const ACCENTS = [
+  { border: '#3b82f6', bg: '#eff6ff' }, // blue
+  { border: '#8b5cf6', bg: '#f5f3ff' }, // violet
+  { border: '#14b8a6', bg: '#f0fdfa' }, // teal
+  { border: '#f59e0b', bg: '#fffbeb' }, // amber
+  { border: '#6366f1', bg: '#eef2ff' }, // indigo
+  { border: '#10b981', bg: '#ecfdf5' }, // emerald
+  { border: '#f43f5e', bg: '#fff1f2' }, // rose
+  { border: '#0ea5e9', bg: '#f0f9ff' }, // sky
+];
+
 function CampaignStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-600',
-    ACTIVE: 'bg-green-100 text-green-700',
+    DRAFT:     'bg-gray-100 text-gray-600',
+    ACTIVE:    'bg-green-100 text-green-700',
     COMPLETED: 'bg-blue-100 text-blue-700',
     CANCELLED: 'bg-red-100 text-red-600',
   };
@@ -75,16 +87,20 @@ function TaskRow({ task, onEdit, onDelete, canDelete }: TaskRowProps) {
 
 interface AccordionItemProps {
   campaign: CampaignWithTasks;
+  accentBorder: string;
+  accentBg: string;
   showCompleted: boolean;
   assignedToMe: boolean;
   myId: string;
   canCreate: boolean;
   canDelete: boolean;
   onRefresh: () => void;
+  onDeleteCampaign: (c: CampaignWithTasks) => void;
 }
 
 function CampaignAccordionItem({
-  campaign, showCompleted, assignedToMe, myId, canCreate, canDelete, onRefresh,
+  campaign, accentBorder, accentBg,
+  showCompleted, assignedToMe, myId, canCreate, canDelete, onRefresh, onDeleteCampaign,
 }: AccordionItemProps) {
   const [open, setOpen] = useState(campaign.status === 'ACTIVE');
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -118,12 +134,16 @@ function CampaignAccordionItem({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div
+      className="bg-white rounded-xl border shadow-sm overflow-hidden"
+      style={{ borderColor: accentBorder, borderLeftWidth: '4px' }}
+    >
       {/* Accordion header */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-5 py-4 transition-colors text-left"
+        style={{ backgroundColor: open ? accentBg : undefined }}
       >
         <span className={`text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -146,8 +166,8 @@ function CampaignAccordionItem({
           <div className="hidden sm:flex items-center gap-1.5">
             <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 rounded-full transition-all"
-                style={{ width: `${progress}%` }}
+                className="h-full rounded-full transition-all"
+                style={{ width: `${progress}%`, backgroundColor: accentBorder }}
               />
             </div>
             <span className="text-xs text-gray-400">{completedCount}/{totalCount}</span>
@@ -159,9 +179,24 @@ function CampaignAccordionItem({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setEditTask({} as Task); }}
-            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors"
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 text-white text-xs font-medium rounded-md transition-colors"
+            style={{ backgroundColor: accentBorder }}
           >
             + Task
+          </button>
+        )}
+
+        {canDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDeleteCampaign(campaign); }}
+            className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors ml-1"
+            aria-label="Delete campaign"
+            title="Delete campaign"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
           </button>
         )}
       </button>
@@ -187,14 +222,14 @@ function CampaignAccordionItem({
         </div>
       )}
 
-      {/* Edit/Create modal */}
+      {/* Edit/Create task modal */}
       {editTask && (
         editTask.id
           ? <TaskFormModal task={editTask} onClose={() => setEditTask(null)} onSaved={() => { onRefresh(); setEditTask(null); }} />
           : <TaskFormModal campaignId={campaign.id} onClose={() => setEditTask(null)} onSaved={() => { onRefresh(); setEditTask(null); }} />
       )}
 
-      {/* Delete confirm */}
+      {/* Delete task confirm */}
       <ConfirmDialog
         open={!!deleteTask}
         title="Delete task?"
@@ -202,7 +237,7 @@ function CampaignAccordionItem({
         confirmLabel="Delete task"
         loading={deleting}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => { if (!deleting) setDeleteTask(null); }}
+        onCancel={() => setDeleteTask(null)}
       />
     </div>
   );
@@ -217,6 +252,10 @@ export default function Dashboard() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState(false);
 
+  // Delete campaign state
+  const [deleteCampaignTarget, setDeleteCampaignTarget] = useState<CampaignWithTasks | null>(null);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
+
   const load = useCallback(() => {
     return campaignsApi.withTasks()
       .then(setCampaigns)
@@ -227,12 +266,35 @@ export default function Dashboard() {
     load().finally(() => setLoading(false));
   }, [load]);
 
+  const handleDeleteCampaignConfirm = async () => {
+    if (!deleteCampaignTarget) return;
+    setDeletingCampaign(true);
+    try {
+      await campaignsApi.remove(deleteCampaignTarget.id);
+      toast.success(`"${deleteCampaignTarget.name}" deleted`);
+      setDeleteCampaignTarget(null);
+      load();
+    } catch {
+      toast.error('Failed to delete campaign.');
+    } finally {
+      setDeletingCampaign(false);
+    }
+  };
+
   if (loading) return <div className="text-center py-20 text-gray-400">Loading campaigns…</div>;
   if (error) return <div className="text-center py-20 text-red-400">{error}</div>;
 
-  // Hide campaigns with no visible tasks when filtering
+  const myId = user?.id ?? '';
+
+  // Filter: hide COMPLETED campaigns when "Show completed" is off.
+  // Filter: when "Assigned to me" is on, hide campaigns that have zero tasks owned by this user.
   const visibleCampaigns = campaigns.filter((c) => {
     if (!showCompleted && c.status === 'COMPLETED') return false;
+    if (assignedToMe) {
+      const mine = c.tasks.filter((t) => t.ownerId === myId);
+      const visibleMine = showCompleted ? mine : mine.filter((t) => t.status !== 'COMPLETED');
+      return visibleMine.length > 0;
+    }
     return true;
   });
 
@@ -267,23 +329,41 @@ export default function Dashboard() {
       </div>
 
       {visibleCampaigns.length === 0 && (
-        <div className="text-center py-20 text-gray-400">No campaigns to display.</div>
+        <div className="text-center py-20 text-gray-400">
+          {assignedToMe ? 'No campaigns with tasks assigned to you.' : 'No campaigns to display.'}
+        </div>
       )}
 
       <div className="flex flex-col gap-3">
-        {visibleCampaigns.map((c) => (
-          <CampaignAccordionItem
-            key={c.id}
-            campaign={c}
-            showCompleted={showCompleted}
-            assignedToMe={assignedToMe}
-            myId={user?.id ?? ''}
-            canCreate={canCreateTask}
-            canDelete={canDeleteTask}
-            onRefresh={load}
-          />
-        ))}
+        {visibleCampaigns.map((c, idx) => {
+          const accent = ACCENTS[idx % ACCENTS.length];
+          return (
+            <CampaignAccordionItem
+              key={c.id}
+              campaign={c}
+              accentBorder={accent.border}
+              accentBg={accent.bg}
+              showCompleted={showCompleted}
+              assignedToMe={assignedToMe}
+              myId={myId}
+              canCreate={canCreateTask}
+              canDelete={canDeleteTask}
+              onRefresh={load}
+              onDeleteCampaign={setDeleteCampaignTarget}
+            />
+          );
+        })}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteCampaignTarget}
+        title={`Delete "${deleteCampaignTarget?.name}"?`}
+        description="This campaign and all its tasks will be permanently deleted. This cannot be undone."
+        confirmLabel="Delete campaign"
+        loading={deletingCampaign}
+        onConfirm={handleDeleteCampaignConfirm}
+        onCancel={() => { if (!deletingCampaign) setDeleteCampaignTarget(null); }}
+      />
     </div>
   );
 }
