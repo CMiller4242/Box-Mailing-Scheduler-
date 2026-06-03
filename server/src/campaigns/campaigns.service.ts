@@ -50,6 +50,62 @@ export class CampaignsService {
     return campaign;
   }
 
+  async findAllWithTasks(user: RequestUser) {
+    const taskWhere = await this.taskScope(user);
+    return this.prisma.campaign.findMany({
+      orderBy: { mailDate: 'asc' },
+      include: {
+        tasks: {
+          where: taskWhere,
+          include: { owner: { select: OWNER_SELECT } },
+          orderBy: { dueDate: 'asc' },
+        },
+      },
+    });
+  }
+
+  async applyTemplate(
+    campaignId: string,
+    templateId: string,
+    clearExisting: boolean,
+    user: RequestUser,
+  ) {
+    const [campaign, template] = await Promise.all([
+      this.prisma.campaign.findUnique({ where: { id: campaignId } }),
+      this.prisma.checklistTemplate.findUnique({
+        where: { id: templateId },
+        include: { items: { orderBy: { sortOrder: 'asc' } } },
+      }),
+    ]);
+    if (!campaign) throw new NotFoundException(`Campaign ${campaignId} not found`);
+    if (!template) throw new NotFoundException(`Template ${templateId} not found`);
+
+    const mailDate = new Date(campaign.mailDate);
+
+    return this.prisma.$transaction(async (tx) => {
+      if (clearExisting) {
+        await tx.task.deleteMany({ where: { campaignId } });
+      }
+      const tasks = await Promise.all(
+        template.items.map((item) => {
+          const dueDate = new Date(mailDate);
+          dueDate.setDate(dueDate.getDate() + (item.defaultDaysOffset ?? 0));
+          return tx.task.create({
+            data: {
+              campaignId,
+              title: item.title,
+              instructions: item.description ?? undefined,
+              priority: item.priority,
+              dueDate,
+              ownerId: null,
+            },
+          });
+        }),
+      );
+      return { applied: tasks.length };
+    });
+  }
+
   create(dto: CreateCampaignDto) {
     return this.prisma.campaign.create({ data: dto });
   }

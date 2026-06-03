@@ -45,9 +45,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  manager      User?    @relation("Reports", fields: [managerId], references: [id])
-  reports      User[]   @relation("Reports")
-  tasks        Task[]
+  manager            User?               @relation("Reports", fields: [managerId], references: [id])
+  reports            User[]              @relation("Reports")
+  tasks              Task[]
+  checklistTemplates ChecklistTemplate[] @relation("ChecklistTemplateCreatedBy")
 }
 
 model Campaign {
@@ -79,6 +80,34 @@ model Task {
   owner       User?          @relation(fields: [ownerId], references: [id])
   alerts      Alert[]
   activities  TaskActivity[]
+}
+
+model ChecklistTemplate {
+  id          String                  @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean                 @default(true)
+  createdById String
+  createdBy   User                    @relation("ChecklistTemplateCreatedBy", fields: [createdById], references: [id])
+  items       ChecklistTemplateItem[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+}
+
+model ChecklistTemplateItem {
+  id                String            @id @default(cuid())
+  templateId        String
+  template          ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  sortOrder         Int
+  defaultRole       UserRole?
+  defaultDaysOffset Int?
+  priority          Priority          @default(MEDIUM)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([templateId, sortOrder])
 }
 
 model Alert {

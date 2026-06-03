@@ -8,6 +8,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { TasksModule } from './tasks/tasks.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { CampaignTemplatesModule } from './campaign-templates/campaign-templates.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -20,6 +21,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     TasksModule,
     AlertsModule,
     CalendarModule,
+    CampaignTemplatesModule,
   ],
   controllers: [AppController],
   providers: [

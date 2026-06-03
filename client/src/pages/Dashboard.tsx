@@ -1,122 +1,289 @@
-import { useState } from 'react';
-import { useCampaignDetail } from '../hooks/useCampaignDetail';
-import { useCampaigns } from '../hooks/useCampaigns';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { campaignsApi } from '../api/campaigns';
 import { useAuth } from '../context/AuthContext';
-import CampaignBoard from '../components/CampaignBoard';
+import { useRole } from '../hooks/useRole';
+import type { CampaignWithTasks, Task, TaskStatus } from '../types';
+import StatusBadge from '../components/StatusBadge';
+import PriorityBadge from '../components/PriorityBadge';
 import TaskFormModal from '../components/TaskFormModal';
-import type { CampaignWithTasks } from '../types';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { tasksApi } from '../api/tasks';
 
-function applyFilter(campaign: CampaignWithTasks, assignedToMe: boolean, myId: string): CampaignWithTasks {
-  if (!assignedToMe) return campaign;
-  return {
-    ...campaign,
-    tasks: campaign.tasks.filter(
-      (t) => t.ownerId === myId && t.status !== 'COMPLETED',
-    ),
+const STATUS_ORDER: TaskStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'];
+
+function CampaignStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    DRAFT: 'bg-gray-100 text-gray-600',
+    ACTIVE: 'bg-green-100 text-green-700',
+    COMPLETED: 'bg-blue-100 text-blue-700',
+    CANCELLED: 'bg-red-100 text-red-600',
   };
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? styles.DRAFT}`}>
+      {status}
+    </span>
+  );
+}
+
+interface TaskRowProps {
+  task: Task;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  canDelete: boolean;
+}
+
+function TaskRow({ task, onEdit, onDelete, canDelete }: TaskRowProps) {
+  const dueDate = new Date(task.dueDate);
+  const isOverdue = dueDate < new Date() && task.status !== 'COMPLETED';
+
+  return (
+    <div
+      onClick={() => onEdit(task)}
+      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors"
+    >
+      <div className="w-24 flex-shrink-0">
+        <StatusBadge status={task.status} />
+      </div>
+      <p className="flex-1 text-sm text-gray-800 truncate">{task.title}</p>
+      <div className="flex-shrink-0">
+        <PriorityBadge priority={task.priority} />
+      </div>
+      <span className={`text-xs flex-shrink-0 w-24 text-right ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+        {dueDate.toLocaleDateString()}
+      </span>
+      {task.owner && (
+        <span className="text-xs text-gray-400 flex-shrink-0 w-28 truncate text-right hidden md:block">
+          {task.owner.name}
+        </span>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+          className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+          aria-label="Delete task"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface AccordionItemProps {
+  campaign: CampaignWithTasks;
+  showCompleted: boolean;
+  assignedToMe: boolean;
+  myId: string;
+  canCreate: boolean;
+  canDelete: boolean;
+  onRefresh: () => void;
+}
+
+function CampaignAccordionItem({
+  campaign, showCompleted, assignedToMe, myId, canCreate, canDelete, onRefresh,
+}: AccordionItemProps) {
+  const [open, setOpen] = useState(campaign.status === 'ACTIVE');
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [deleteTask, setDeleteTask] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  let tasks = campaign.tasks;
+  if (assignedToMe) tasks = tasks.filter((t) => t.ownerId === myId);
+  if (!showCompleted) tasks = tasks.filter((t) => t.status !== 'COMPLETED');
+  tasks = [...tasks].sort(
+    (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+  );
+
+  const totalCount = campaign.tasks.length;
+  const completedCount = campaign.tasks.filter((t) => t.status === 'COMPLETED').length;
+  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTask) return;
+    setDeleting(true);
+    try {
+      await tasksApi.remove(deleteTask.id);
+      toast.success('Task deleted');
+      onRefresh();
+      setDeleteTask(null);
+    } catch {
+      toast.error('Failed to delete task.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Accordion header */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+      >
+        <span className={`text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-900 text-sm">{campaign.name}</span>
+            <CampaignStatusBadge status={campaign.status} />
+            <span className="text-xs text-gray-400">
+              Mail: {new Date(campaign.mailDate).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5">
+            <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-400">{completedCount}/{totalCount}</span>
+          </div>
+          <span className="text-xs text-gray-400 tabular-nums">{tasks.length} shown</span>
+        </div>
+
+        {canCreate && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setEditTask({} as Task); }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors"
+          >
+            + Task
+          </button>
+        )}
+      </button>
+
+      {/* Task list */}
+      {open && (
+        <div className="border-t border-gray-100">
+          {tasks.length === 0 ? (
+            <div className="text-center text-sm text-gray-400 py-6">
+              {assignedToMe ? 'No tasks assigned to you here.' : 'No tasks to show.'}
+            </div>
+          ) : (
+            tasks.map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                onEdit={setEditTask}
+                onDelete={setDeleteTask}
+                canDelete={canDelete}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Edit/Create modal */}
+      {editTask && (
+        editTask.id
+          ? <TaskFormModal task={editTask} onClose={() => setEditTask(null)} onSaved={() => { onRefresh(); setEditTask(null); }} />
+          : <TaskFormModal campaignId={campaign.id} onClose={() => setEditTask(null)} onSaved={() => { onRefresh(); setEditTask(null); }} />
+      )}
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={!!deleteTask}
+        title="Delete task?"
+        description={`"${deleteTask?.title}" will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete task"
+        loading={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => { if (!deleting) setDeleteTask(null); }}
+      />
+    </div>
+  );
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { campaigns, loading: loadingList, error: listError } = useCampaigns();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showNewTask, setShowNewTask] = useState(false);
+  const { canCreateTask, canDeleteTask } = useRole();
+  const [campaigns, setCampaigns] = useState<CampaignWithTasks[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState(false);
 
-  const activeId =
-    selectedId ?? campaigns.find((c) => c.status === 'ACTIVE')?.id ?? campaigns[0]?.id ?? null;
+  const load = useCallback(() => {
+    return campaignsApi.withTasks()
+      .then(setCampaigns)
+      .catch(() => setError('Failed to load campaigns. Please refresh.'));
+  }, []);
 
-  const { campaign, loading: loadingDetail, error: detailError, refresh } = useCampaignDetail(activeId);
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
 
-  if (loadingList) {
-    return <div className="text-center py-20 text-gray-400">Loading campaigns…</div>;
-  }
-  if (listError) {
-    return <div className="text-center py-20 text-red-400">Failed to load campaigns: {listError}</div>;
-  }
-  if (campaigns.length === 0) {
-    return <div className="text-center py-20 text-gray-400">No campaigns found. Add one to get started.</div>;
-  }
+  if (loading) return <div className="text-center py-20 text-gray-400">Loading campaigns…</div>;
+  if (error) return <div className="text-center py-20 text-red-400">{error}</div>;
 
-  const filteredCampaign = campaign && user
-    ? applyFilter(campaign, assignedToMe, user.id)
-    : campaign;
+  // Hide campaigns with no visible tasks when filtering
+  const visibleCampaigns = campaigns.filter((c) => {
+    if (!showCompleted && c.status === 'COMPLETED') return false;
+    return true;
+  });
 
   return (
     <div>
-      {/* Page header */}
-      <div className="mb-6 flex items-center gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold text-gray-900 mr-2">Dashboard</h1>
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900 flex-1">Dashboard</h1>
 
-        {/* Campaign tabs */}
-        <div className="flex items-center gap-2 flex-wrap flex-1">
-          {campaigns.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedId(c.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                c.id === activeId
-                  ? 'bg-blue-700 text-white shadow-sm'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {c.name}
-              <span className="ml-1.5 text-xs opacity-70">({c._count?.tasks ?? 0})</span>
-            </button>
-          ))}
-        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCompleted((v) => !v)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              showCompleted
+                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {showCompleted ? 'Hide' : 'Show'} completed
+          </button>
 
-        {/* Filters + CTA */}
-        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
           <button
             onClick={() => setAssignedToMe((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
               assignedToMe
                 ? 'bg-blue-50 border-blue-300 text-blue-700'
                 : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
-            <span className="text-base leading-none">{assignedToMe ? '✓' : '○'}</span>
             Assigned to me
           </button>
-
-          {activeId && (
-            <button
-              onClick={() => setShowNewTask(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              <span className="text-base leading-none">+</span> New Task
-            </button>
-          )}
         </div>
       </div>
 
-      {detailError && (
-        <div className="mb-4 text-sm text-red-500">Failed to load campaign: {detailError}</div>
+      {visibleCampaigns.length === 0 && (
+        <div className="text-center py-20 text-gray-400">No campaigns to display.</div>
       )}
 
-      {assignedToMe && (
-        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-          <span>Showing open tasks assigned to you</span>
-          <button onClick={() => setAssignedToMe(false)} className="text-blue-400 hover:text-blue-600 text-xs">
-            Clear
-          </button>
-        </div>
-      )}
-
-      {loadingDetail ? (
-        <div className="text-center py-20 text-gray-400">Loading tasks…</div>
-      ) : filteredCampaign ? (
-        <CampaignBoard campaign={filteredCampaign} onTaskUpdated={refresh} />
-      ) : null}
-
-      {showNewTask && activeId && (
-        <TaskFormModal
-          campaignId={activeId}
-          onClose={() => setShowNewTask(false)}
-          onSaved={() => { refresh(); setShowNewTask(false); }}
-        />
-      )}
+      <div className="flex flex-col gap-3">
+        {visibleCampaigns.map((c) => (
+          <CampaignAccordionItem
+            key={c.id}
+            campaign={c}
+            showCompleted={showCompleted}
+            assignedToMe={assignedToMe}
+            myId={user?.id ?? ''}
+            canCreate={canCreateTask}
+            canDelete={canDeleteTask}
+            onRefresh={load}
+          />
+        ))}
+      </div>
     </div>
   );
 }

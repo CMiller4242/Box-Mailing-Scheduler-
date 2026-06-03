@@ -64,5 +64,32 @@ export interface CalendarEvent {
   status: string;
   priority?: Priority;
   campaignId?: string;
+  campaignName?: string;
   ownerId?: string;
+  assigneeName?: string;
+}
+
+export interface ChecklistTemplateItem {
+  id: string;
+  templateId: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+  defaultRole?: UserRole;
+  defaultDaysOffset?: number;
+  priority: Priority;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChecklistTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdById: string;
+  createdBy?: Pick<User, 'id' | 'firstName' | 'lastName'>;
+  items: ChecklistTemplateItem[];
+  createdAt: string;
+  updatedAt: string;
 }
