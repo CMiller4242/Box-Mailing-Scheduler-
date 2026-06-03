@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useRole } from './hooks/useRole';
@@ -70,8 +70,8 @@ function AppShell() {
 
       <main className={`flex-1 ${user ? 'max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6' : ''}`}>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
           <Route
             path="/"
             element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
