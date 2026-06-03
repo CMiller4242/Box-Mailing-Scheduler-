@@ -156,7 +156,7 @@ export default function CalendarPage() {
       {error && <div className="text-center py-20 text-red-400">Failed to load events: {error}</div>}
 
       {!loading && !error && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 -mx-2 sm:-mx-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 -mx-4 sm:-mx-6 lg:-mx-8">
           {/* Legend */}
           <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
             <div className="flex gap-4 text-xs flex-wrap">

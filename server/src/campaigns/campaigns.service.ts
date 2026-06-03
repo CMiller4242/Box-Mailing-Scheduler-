@@ -107,12 +107,15 @@ export class CampaignsService {
   }
 
   create(dto: CreateCampaignDto) {
-    return this.prisma.campaign.create({ data: dto });
+    return this.prisma.campaign.create({
+      data: { ...dto, mailDate: new Date(dto.mailDate) },
+    });
   }
 
   async update(id: string, dto: UpdateCampaignDto) {
     await this.findOne(id);
-    return this.prisma.campaign.update({ where: { id }, data: dto });
+    const data = dto.mailDate ? { ...dto, mailDate: new Date(dto.mailDate) } : dto;
+    return this.prisma.campaign.update({ where: { id }, data });
   }
 
   async remove(id: string) {
