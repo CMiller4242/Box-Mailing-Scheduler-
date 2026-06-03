@@ -14,6 +14,22 @@ export class CampaignsController {
   @ApiOperation({ summary: 'List all campaigns' })
   findAll() { return this.campaignsService.findAll(); }
 
+  @Get('with-tasks')
+  @ApiOperation({ summary: 'List all campaigns with role-scoped tasks' })
+  findAllWithTasks(@CurrentUser() user: any) {
+    return this.campaignsService.findAllWithTasks(user);
+  }
+
+  @Post(':id/apply-template')
+  @ApiOperation({ summary: 'Apply a checklist template to a campaign' })
+  applyTemplate(
+    @Param('id') id: string,
+    @Body() body: { templateId: string; clearExisting?: boolean },
+    @CurrentUser() user: any,
+  ) {
+    return this.campaignsService.applyTemplate(id, body.templateId, body.clearExisting ?? false, user);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a campaign with tasks scoped by caller role' })
   findOne(@Param('id') id: string, @CurrentUser() user: any) {

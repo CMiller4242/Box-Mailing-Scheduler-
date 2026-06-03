@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { DateClickArg } from '@fullcalendar/interaction';
-import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
+import type { EventClickArg, EventContentArg, EventHoveringArg } from '@fullcalendar/core';
 import { calendarApi } from '../api/calendar';
 import { tasksApi } from '../api/tasks';
 import { useAuth } from '../context/AuthContext';
@@ -50,6 +50,12 @@ function EventChip({ arg }: { arg: EventContentArg }) {
   );
 }
 
+interface TooltipState {
+  x: number;
+  y: number;
+  event: CalendarEvent;
+}
+
 type ModalState =
   | { mode: 'create'; date: string; campaignId: string }
   | { mode: 'edit'; task: Task };
@@ -62,6 +68,8 @@ export default function CalendarPage() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [fetchingTask, setFetchingTask] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const tooltipTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadEvents = useCallback(() => {
     return calendarApi
@@ -93,6 +101,18 @@ export default function CalendarPage() {
     } finally {
       setFetchingTask(false);
     }
+  };
+
+  const handleEventMouseEnter = (arg: EventHoveringArg) => {
+    const calEvent = arg.event.extendedProps as CalendarEvent;
+    if (calEvent.type === 'campaign') return;
+    const rect = (arg.el as HTMLElement).getBoundingClientRect();
+    if (tooltipTimeout.current) clearTimeout(tooltipTimeout.current);
+    setTooltip({ x: rect.left + rect.width / 2, y: rect.bottom + window.scrollY + 4, event: calEvent });
+  };
+
+  const handleEventMouseLeave = () => {
+    tooltipTimeout.current = setTimeout(() => setTooltip(null), 150);
   };
 
   const handleSaved = () => {
@@ -170,18 +190,38 @@ export default function CalendarPage() {
               events={fcEvents}
               dateClick={handleDateClick}
               eventClick={handleEventClick}
+              eventMouseEnter={handleEventMouseEnter}
+              eventMouseLeave={handleEventMouseLeave}
               headerToolbar={{
                 left: 'prev,next today',
                 center: 'title',
                 right: 'dayGridMonth,dayGridWeek',
               }}
-              height="auto"
+              height={700}
               eventDisplay="block"
               eventCursor="pointer"
-              dayMaxEvents={2}
+              dayMaxEvents={3}
               eventContent={(arg) => <EventChip arg={arg} />}
             />
           )}
+        </div>
+      )}
+
+      {/* Hover tooltip */}
+      {tooltip && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{ left: tooltip.x, top: tooltip.y, transform: 'translateX(-50%)' }}
+        >
+          <div className="bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 max-w-xs">
+            <p className="font-medium truncate">{tooltip.event.title}</p>
+            {tooltip.event.campaignName && (
+              <p className="text-gray-300 mt-0.5">Campaign: {tooltip.event.campaignName}</p>
+            )}
+            {tooltip.event.assigneeName && (
+              <p className="text-gray-300">Assignee: {tooltip.event.assigneeName}</p>
+            )}
+          </div>
         </div>
       )}
 

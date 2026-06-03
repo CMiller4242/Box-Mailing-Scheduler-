@@ -9,6 +9,7 @@ import CalendarPage from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import CampaignsPage from './pages/CampaignsPage';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -44,6 +45,7 @@ function AppShell() {
             <nav className="flex items-center gap-6 text-sm font-medium">
               {navLink('/', 'Dashboard', true)}
               {navLink('/calendar', 'Calendar')}
+              {navLink('/campaigns', 'Campaigns')}
               {isAdmin && navLink('/admin/users', 'Users')}
 
               {/* User menu */}
@@ -77,6 +79,10 @@ function AppShell() {
           <Route
             path="/calendar"
             element={<ProtectedRoute><CalendarPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/campaigns"
+            element={<ProtectedRoute><CampaignsPage /></ProtectedRoute>}
           />
           <Route
             path="/admin/users"

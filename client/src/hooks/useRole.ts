@@ -19,5 +19,6 @@ export function useRole() {
     canCreateTask: role === 'ADMIN' || role === 'MANAGER',
     canDeleteTask: role === 'ADMIN' || role === 'MANAGER',
     canEditFullTask: role === 'ADMIN' || role === 'MANAGER',
+    canManageTemplates: role === 'ADMIN' || role === 'MANAGER',
   };
 }
