@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { effectiveRole } from '../common/utils/role.utils';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -15,6 +16,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ─── Scope helpers ────────────────────────────────────────────────────────
@@ -133,5 +135,80 @@ export class TasksService {
     const task = await this.findOne(id);
     await this.assertCanModify(task.ownerId, user);
     return this.prisma.task.delete({ where: { id } });
+  }
+
+  // ─── Complete + auto-advance ───────────────────────────────────────────────
+
+  async complete(id: string, nextOwnerId: string | undefined, user: RequestUser) {
+    const task = await this.findOne(id);
+    await this.assertCanModify(task.ownerId, user);
+
+    await this.prisma.task.update({
+      where: { id },
+      data: { status: 'COMPLETED' },
+    });
+    await this.prisma.taskActivity.create({ data: { taskId: id, action: 'Task completed' } });
+
+    // Find next NOT_STARTED task in the same campaign (by sortOrder then dueDate)
+    const nextTask = await this.prisma.task.findFirst({
+      where: { campaignId: task.campaignId, status: 'NOT_STARTED', id: { not: id } },
+      orderBy: [{ sortOrder: 'asc' }, { dueDate: 'asc' }],
+    });
+
+    if (nextTask) {
+      const assigneeId = nextOwnerId ?? nextTask.ownerId;
+      if (assigneeId) {
+        await this.prisma.task.update({ where: { id: nextTask.id }, data: { ownerId: assigneeId } });
+        await this.notifications.create(
+          assigneeId,
+          `You've been assigned: "${nextTask.title}"`,
+          nextTask.id,
+        );
+      }
+    }
+
+    return { completed: id, next: nextTask?.id ?? null };
+  }
+
+  // ─── Attachments ───────────────────────────────────────────────────────────
+
+  async addAttachment(
+    taskId: string,
+    file: Express.Multer.File,
+    uploaderId: string,
+  ) {
+    await this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    return this.prisma.taskAttachment.create({
+      data: {
+        taskId,
+        filename: file.originalname,
+        storedName: file.filename,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploaderId,
+      },
+    });
+  }
+
+  getAttachments(taskId: string) {
+    return this.prisma.taskAttachment.findMany({
+      where: { taskId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getAttachmentById(id: string) {
+    const a = await this.prisma.taskAttachment.findUnique({ where: { id } });
+    if (!a) throw new NotFoundException('Attachment not found');
+    return a;
+  }
+
+  async removeAttachment(attachmentId: string, userId: string, userRole: string) {
+    const attachment = await this.prisma.taskAttachment.findUniqueOrThrow({ where: { id: attachmentId } });
+    const role = effectiveRole(userRole);
+    if (role === 'EMPLOYEE' && attachment.uploaderId !== userId) {
+      throw new ForbiddenException('You can only delete your own attachments');
+    }
+    return this.prisma.taskAttachment.delete({ where: { id: attachmentId } });
   }
 }

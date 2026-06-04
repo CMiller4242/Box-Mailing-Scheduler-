@@ -205,7 +205,6 @@ export default function CalendarPage() {
               }}
               height={700}
               eventDisplay="block"
-              eventCursor="pointer"
               dayMaxEvents={3}
               eventContent={(arg) => <EventChip arg={arg} />}
             />
