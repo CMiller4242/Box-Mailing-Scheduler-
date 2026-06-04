@@ -49,6 +49,7 @@ model User {
   reports            User[]              @relation("Reports")
   tasks              Task[]
   checklistTemplates ChecklistTemplate[] @relation("ChecklistTemplateCreatedBy")
+  notifications      Notification[]
 }
 
 model Campaign {
@@ -64,22 +65,25 @@ model Campaign {
 }
 
 model Task {
-  id              String     @id @default(uuid())
-  campaignId      String
-  title           String
-  instructions    String?
-  ownerId         String?
-  dueDate         DateTime
-  status          TaskStatus @default(NOT_STARTED)
-  priority        Priority   @default(MEDIUM)
+  id               String     @id @default(uuid())
+  campaignId       String
+  title            String
+  instructions     String?
+  ownerId          String?
+  dueDate          DateTime
+  status           TaskStatus @default(NOT_STARTED)
+  priority         Priority   @default(MEDIUM)
+  sortOrder        Int        @default(0)
   reminderDateTime DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  campaign    Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  owner       User?          @relation(fields: [ownerId], references: [id])
-  alerts      Alert[]
-  activities  TaskActivity[]
+  campaign     Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  owner        User?           @relation(fields: [ownerId], references: [id])
+  alerts       Alert[]
+  activities   TaskActivity[]
+  attachments  TaskAttachment[]
+  notifications Notification[]
 }
 
 model ChecklistTemplate {
@@ -95,19 +99,45 @@ model ChecklistTemplate {
 }
 
 model ChecklistTemplateItem {
-  id                String            @id @default(cuid())
-  templateId        String
-  template          ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  title             String
-  description       String?
-  sortOrder         Int
-  defaultRole       UserRole?
-  defaultDaysOffset Int?
-  priority          Priority          @default(MEDIUM)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  templateId         String
+  template           ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  sortOrder          Int
+  defaultRole        UserRole?
+  defaultDaysOffset  Int?
+  defaultAssigneeId  String?
+  priority           Priority          @default(MEDIUM)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   @@index([templateId, sortOrder])
+}
+
+model TaskAttachment {
+  id          String   @id @default(uuid())
+  taskId      String
+  filename    String
+  storedName  String
+  mimeType    String
+  size        Int
+  uploaderId  String
+  createdAt   DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  taskId    String?
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 }
 
 model Alert {

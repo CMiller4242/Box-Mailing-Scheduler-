@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Task, TaskStatus, Priority } from '../types';
+import { toast } from 'sonner';
+import type { Task, TaskAttachment, TaskStatus, Priority } from '../types';
 import { tasksApi } from '../api/tasks';
 import { useUsers } from '../hooks/useUsers';
 import { useRole } from '../hooks/useRole';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
-  /** Present → edit mode. Absent → create mode. */
   task?: Task;
-  /** Required in create mode. */
   campaignId?: string;
-  /** Pre-fill dueDate in create mode (YYYY-MM-DD). */
   defaultDate?: string;
   onClose: () => void;
   onSaved: () => void;
@@ -31,11 +30,18 @@ function toDateInput(iso: string) {
   return iso.split('T')[0];
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
 export default function TaskFormModal({ task, campaignId, defaultDate, onClose, onSaved }: Props) {
   const isEdit = !!task;
   const users = useUsers();
   const firstRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
   const { canEditFullTask, isEmployee } = useRole();
+  const { user: authUser } = useAuth();
 
   const [title, setTitle] = useState(task?.title ?? '');
   const [dueDate, setDueDate] = useState(task ? toDateInput(task.dueDate) : (defaultDate ?? ''));
@@ -46,7 +52,16 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Employees editing: can update ownerId only when marking as COMPLETED
+  // Attachments
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Complete Task action
+  const [completing, setCompleting] = useState(false);
+
+  const isCurrentOwner = !!task && task.ownerId === authUser?.id;
+  const canComplete = isEdit && task.status !== 'COMPLETED' && (isCurrentOwner || !isEmployee);
   const employeeCanChangeOwner = isEmployee && isEdit && status === 'COMPLETED';
 
   useEffect(() => { (firstRef.current as HTMLElement | null)?.focus(); }, []);
@@ -56,6 +71,11 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isEdit || !task?.id) return;
+    tasksApi.getAttachments(task.id).then(setAttachments).catch(() => {});
+  }, [isEdit, task?.id]);
 
   const validate = () => {
     if (!title.trim()) return 'Title is required.';
@@ -73,7 +93,6 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
     setError(null);
     try {
       if (isEmployee && isEdit) {
-        // Employees: only allowed to update status, instructions, and ownerId on completion
         const payload: Record<string, unknown> = { status, instructions: instructions.trim() || undefined };
         if (employeeCanChangeOwner) payload.ownerId = ownerId || undefined;
         await tasksApi.update(task!.id, payload);
@@ -102,6 +121,45 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
       setError(e instanceof Error ? e.message : 'Save failed. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!task?.id) return;
+    setCompleting(true);
+    try {
+      const result = await tasksApi.complete(task.id);
+      toast.success(result.next ? 'Task completed — next task assigned.' : 'Task marked complete.');
+      onSaved();
+    } catch {
+      toast.error('Failed to complete task.');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !task?.id) return;
+    setUploading(true);
+    try {
+      const attachment = await tasksApi.uploadAttachment(task.id, file);
+      setAttachments((prev) => [...prev, attachment]);
+      toast.success('File uploaded.');
+    } catch {
+      toast.error('Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    try {
+      await tasksApi.deleteAttachment(attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    } catch {
+      toast.error('Failed to delete attachment.');
     }
   };
 
@@ -226,27 +284,89 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
               />
             </div>
 
+            {/* Attachments (edit mode only) */}
+            {isEdit && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+                {attachments.length > 0 && (
+                  <ul className="space-y-1 mb-2">
+                    {attachments.map((a) => (
+                      <li key={a.id} className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-md px-3 py-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                        </svg>
+                        <a
+                          href={tasksApi.downloadAttachmentUrl(a.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 truncate text-blue-600 hover:underline"
+                        >
+                          {a.filename}
+                        </a>
+                        <span className="text-gray-400 flex-shrink-0">{formatBytes(a.size)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAttachment(a.id)}
+                          className="text-gray-300 hover:text-red-500 flex-shrink-0"
+                          aria-label="Delete attachment"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 cursor-pointer hover:bg-gray-50 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  {uploading ? 'Uploading…' : 'Upload file'}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
+              </div>
+            )}
+
             {error && (
               <p className="text-sm text-red-500">{error}</p>
             )}
           </div>
 
           {/* Footer */}
-          <div className="px-6 pb-5 pt-2 flex items-center justify-end gap-3 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Task'}
-            </button>
+          <div className="px-6 pb-5 pt-2 flex items-center justify-between gap-3 border-t border-gray-100">
+            <div>
+              {canComplete && (
+                <button
+                  type="button"
+                  onClick={handleComplete}
+                  disabled={completing}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+                >
+                  {completing ? 'Completing…' : '✓ Complete Task'}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Task'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

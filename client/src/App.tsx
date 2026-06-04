@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import CampaignsPage from './pages/CampaignsPage';
+import NotificationBell from './components/NotificationBell';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -47,6 +48,8 @@ function AppShell() {
               {navLink('/calendar', 'Calendar')}
               {navLink('/campaigns', 'Campaigns')}
               {isAdmin && navLink('/admin/users', 'Users')}
+
+              <NotificationBell />
 
               {/* User menu */}
               <div className="flex items-center gap-3 ml-4 pl-4 border-l border-slate-700">

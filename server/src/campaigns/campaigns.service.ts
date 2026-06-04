@@ -87,7 +87,7 @@ export class CampaignsService {
         await tx.task.deleteMany({ where: { campaignId } });
       }
       const tasks = await Promise.all(
-        template.items.map((item) => {
+        template.items.map((item, idx) => {
           const dueDate = new Date(mailDate);
           dueDate.setDate(dueDate.getDate() + (item.defaultDaysOffset ?? 0));
           return tx.task.create({
@@ -96,8 +96,9 @@ export class CampaignsService {
               title: item.title,
               instructions: item.description ?? undefined,
               priority: item.priority,
+              sortOrder: item.sortOrder ?? idx,
               dueDate,
-              ownerId: null,
+              ownerId: (item as any).defaultAssigneeId ?? null,
             },
           });
         }),

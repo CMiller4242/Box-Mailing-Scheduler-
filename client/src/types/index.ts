@@ -46,9 +46,31 @@ export interface Task {
   dueDate: string;
   status: TaskStatus;
   priority: Priority;
+  sortOrder: number;
   reminderDateTime?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  filename: string;
+  storedName: string;
+  mimeType: string;
+  size: number;
+  uploaderId: string;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  taskId?: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  task?: { id: string; title: string; campaignId: string } | null;
 }
 
 export interface CampaignWithTasks extends Campaign {
