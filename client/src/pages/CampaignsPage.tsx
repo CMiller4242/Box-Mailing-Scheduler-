@@ -4,6 +4,7 @@ import { campaignsApi } from '../api/campaigns';
 import { campaignTemplatesApi, type TemplatePayload } from '../api/campaignTemplates';
 import { tasksApi } from '../api/tasks';
 import { useRole } from '../hooks/useRole';
+import { useUsers } from '../hooks/useUsers';
 import type { Campaign, CampaignStatus, ChecklistTemplate } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -28,6 +29,7 @@ interface ChecklistItem {
   title: string;
   daysOffset: number;
   priority: Priority;
+  assigneeId: string;
 }
 
 // ── Campaign form modal (create / edit) ────────────────────────────────────
@@ -41,6 +43,7 @@ interface CampaignFormModalProps {
 
 function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFormModalProps) {
   const isEdit = !!existing;
+  const users = useUsers();
 
   const [name, setName]       = useState(existing?.name ?? '');
   const [mailDate, setMailDate] = useState(
@@ -59,7 +62,7 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
 
   const activeTemplates = templates.filter((t) => t.isActive);
 
-  // When a template is selected from the dropdown, pre-fill checklist items
+  // When a template is selected from the dropdown, pre-fill checklist items (including pre-assigned user)
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplateId(templateId);
     if (!templateId) return;
@@ -70,12 +73,13 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
         title: i.title,
         daysOffset: i.defaultDaysOffset ?? 0,
         priority: (i.priority as Priority) ?? 'MEDIUM',
+        assigneeId: i.defaultAssigneeId ?? '',
       })),
     );
   };
 
   const addItem = () =>
-    setItems((prev) => [...prev, { title: '', daysOffset: 0, priority: 'MEDIUM' }]);
+    setItems((prev) => [...prev, { title: '', daysOffset: 0, priority: 'MEDIUM', assigneeId: '' }]);
 
   const removeItem = (idx: number) =>
     setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -111,7 +115,7 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
 
       const validItems = items.filter((i) => i.title.trim());
 
-      // Optionally save as a reusable template
+      // Optionally save as a reusable template (including pre-assignment)
       if (saveAsTemplate && templateName.trim() && validItems.length > 0) {
         const payload: TemplatePayload = {
           name: templateName.trim(),
@@ -121,6 +125,7 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
             sortOrder: idx,
             defaultDaysOffset: item.daysOffset || undefined,
             priority: item.priority,
+            defaultAssigneeId: item.assigneeId || undefined,
           })),
         };
         await campaignTemplatesApi.create(payload).catch(() => {
@@ -128,11 +133,11 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
         });
       }
 
-      // Create tasks from checklist items
+      // Create tasks from checklist items (with pre-assigned owner)
       if (validItems.length > 0) {
         const base = new Date(mailDate);
         await Promise.all(
-          validItems.map((item) => {
+          validItems.map((item, idx) => {
             const due = new Date(base);
             due.setDate(due.getDate() + item.daysOffset);
             return tasksApi.create({
@@ -140,6 +145,7 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
               title: item.title.trim(),
               dueDate: due.toISOString(),
               priority: item.priority,
+              ownerId: item.assigneeId || undefined,
             });
           }),
         );
@@ -147,8 +153,9 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
 
       toast.success('Campaign created');
       onSaved();
-    } catch {
-      toast.error(`Failed to ${isEdit ? 'update' : 'create'} campaign.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      toast.error(`Failed to ${isEdit ? 'update' : 'create'} campaign.${msg ? ` ${msg}` : ''}`);
     } finally {
       setSaving(false);
     }
@@ -257,21 +264,21 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
                   </div>
                 ) : (
                   items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                      <input
-                        placeholder="Task title *"
-                        value={item.title}
-                        onChange={(e) => updateItem(idx, { title: e.target.value })}
-                        className="flex-1 min-w-0 bg-transparent border-0 text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
-                      />
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className="flex items-center gap-1">
+                    <div key={idx} className="bg-gray-50 rounded-lg px-3 py-2 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          placeholder="Task title *"
+                          value={item.title}
+                          onChange={(e) => updateItem(idx, { title: e.target.value })}
+                          className="flex-1 min-w-0 bg-transparent border-0 text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
+                        />
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <span className="text-xs text-gray-400">+</span>
                           <input
                             type="number"
                             value={item.daysOffset}
                             onChange={(e) => updateItem(idx, { daysOffset: Number(e.target.value) })}
-                            title="Days before/after mail date"
+                            title="Days offset from mail date"
                             className="w-14 border border-gray-200 rounded px-1.5 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
                           <span className="text-xs text-gray-400">d</span>
@@ -293,6 +300,18 @@ function CampaignFormModal({ existing, templates, onClose, onSaved }: CampaignFo
                           </svg>
                         </button>
                       </div>
+                      {users.length > 0 && (
+                        <select
+                          value={item.assigneeId}
+                          onChange={(e) => updateItem(idx, { assigneeId: e.target.value })}
+                          className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                        >
+                          <option value="">— No assignee —</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   ))
                 )}
@@ -354,6 +373,7 @@ interface TemplateFormModalProps {
 const ROLE_OPTIONS = ['', 'ADMIN', 'MANAGER', 'EMPLOYEE'] as const;
 
 function TemplateFormModal({ existing, onClose, onSaved }: TemplateFormModalProps) {
+  const users = useUsers();
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [isActive, setIsActive] = useState(existing?.isActive ?? true);
@@ -364,15 +384,16 @@ function TemplateFormModal({ existing, onClose, onSaved }: TemplateFormModalProp
       sortOrder: i.sortOrder,
       defaultRole: i.defaultRole ?? '',
       defaultDaysOffset: i.defaultDaysOffset ?? 0,
+      defaultAssigneeId: i.defaultAssigneeId ?? '',
       priority: i.priority as Priority,
-    })) ?? [{ title: '', description: '', sortOrder: 0, defaultRole: '', defaultDaysOffset: 0, priority: 'MEDIUM' as Priority }],
+    })) ?? [{ title: '', description: '', sortOrder: 0, defaultRole: '', defaultDaysOffset: 0, defaultAssigneeId: '', priority: 'MEDIUM' as Priority }],
   );
   const [saving, setSaving] = useState(false);
 
   const addItem = () =>
     setItems((prev) => [
       ...prev,
-      { title: '', description: '', sortOrder: prev.length, defaultRole: '', defaultDaysOffset: 0, priority: 'MEDIUM' as Priority },
+      { title: '', description: '', sortOrder: prev.length, defaultRole: '', defaultDaysOffset: 0, defaultAssigneeId: '', priority: 'MEDIUM' as Priority },
     ]);
 
   const removeItem = (idx: number) =>
@@ -396,6 +417,7 @@ function TemplateFormModal({ existing, onClose, onSaved }: TemplateFormModalProp
           sortOrder: i,
           defaultRole: item.defaultRole || undefined,
           defaultDaysOffset: item.defaultDaysOffset || undefined,
+          defaultAssigneeId: item.defaultAssigneeId || undefined,
           priority: item.priority,
         })).filter((item) => item.title),
       };
@@ -495,6 +517,21 @@ function TemplateFormModal({ existing, onClose, onSaved }: TemplateFormModalProp
                       </select>
                     </div>
                   </div>
+                  {users.length > 0 && (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Pre-assign to</label>
+                      <select
+                        value={item.defaultAssigneeId}
+                        onChange={(e) => updateItem(idx, { defaultAssigneeId: e.target.value })}
+                        className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">— No default assignee —</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -710,12 +747,15 @@ export default function CampaignsPage() {
                     <p className="text-xs text-gray-400 mb-3">{t.items.length} items</p>
                     <div className="space-y-1 mb-4 max-h-32 overflow-y-auto">
                       {t.items.map((item) => (
-                        <div key={item.id} className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <span className="text-gray-300">•</span>
-                          <span className="truncate">{item.title}</span>
-                          {item.defaultDaysOffset != null && (
-                            <span className="text-gray-400 flex-shrink-0">({item.defaultDaysOffset > 0 ? '+' : ''}{item.defaultDaysOffset}d)</span>
-                          )}
+                        <div key={item.id} className="flex items-start gap-1.5 text-xs text-gray-600">
+                          <span className="text-gray-300 mt-px">•</span>
+                          <div className="min-w-0">
+                            <span className="truncate block">{item.title}</span>
+                            <span className="text-gray-400">
+                              {item.defaultDaysOffset != null && `${item.defaultDaysOffset > 0 ? '+' : ''}${item.defaultDaysOffset}d`}
+                              {item.defaultAssigneeId && ' · pre-assigned'}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>

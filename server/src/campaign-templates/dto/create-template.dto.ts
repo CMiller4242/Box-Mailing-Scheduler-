@@ -25,6 +25,10 @@ export class CreateTemplateItemDto {
   @IsOptional()
   @IsEnum(Priority)
   priority?: Priority;
+
+  @IsOptional()
+  @IsString()
+  defaultAssigneeId?: string;
 }
 
 export class CreateTemplateDto {

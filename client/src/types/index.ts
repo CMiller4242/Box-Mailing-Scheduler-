@@ -99,6 +99,7 @@ export interface ChecklistTemplateItem {
   sortOrder: number;
   defaultRole?: UserRole;
   defaultDaysOffset?: number;
+  defaultAssigneeId?: string;
   priority: Priority;
   createdAt: string;
   updatedAt: string;
