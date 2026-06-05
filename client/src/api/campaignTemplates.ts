@@ -11,6 +11,7 @@ export interface TemplatePayload {
     sortOrder: number;
     defaultRole?: string;
     defaultDaysOffset?: number;
+    defaultAssigneeId?: string;
     priority?: string;
   }[];
 }
