@@ -211,4 +211,15 @@ export class TasksService {
     }
     return this.prisma.taskAttachment.delete({ where: { id: attachmentId } });
   }
+
+  async markSentToSalesEnablement(attachmentId: string, userId: string) {
+    await this.prisma.taskAttachment.findUniqueOrThrow({ where: { id: attachmentId } });
+    return this.prisma.taskAttachment.update({
+      where: { id: attachmentId },
+      data: {
+        sentToSalesEnablementAt: new Date(),
+        sentToSalesEnablementBy: userId,
+      },
+    });
+  }
 }

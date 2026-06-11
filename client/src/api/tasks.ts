@@ -37,4 +37,6 @@ export const tasksApi = {
     `${client.defaults.baseURL}/tasks/attachments/${attachmentId}/download`,
   deleteAttachment: (attachmentId: string) =>
     client.delete(`/tasks/attachments/${attachmentId}`).then((r) => r.data),
+  markSentToSalesEnablement: (attachmentId: string) =>
+    client.patch<TaskAttachment>(`/tasks/attachments/${attachmentId}/sales-enablement`).then((r) => r.data),
 };

@@ -60,6 +60,8 @@ export interface TaskAttachment {
   mimeType: string;
   size: number;
   uploaderId: string;
+  sentToSalesEnablementAt?: string;
+  sentToSalesEnablementBy?: string;
   createdAt: string;
 }
 
