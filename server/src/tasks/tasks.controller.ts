@@ -106,4 +106,10 @@ export class TasksController {
   removeAttachment(@Param('attachmentId') attachmentId: string, @CurrentUser() user: any) {
     return this.tasksService.removeAttachment(attachmentId, user.id, user.role);
   }
+
+  @Patch('attachments/:attachmentId/sales-enablement')
+  @ApiOperation({ summary: 'Mark attachment as sent to Sales Enablement' })
+  markSentToSalesEnablement(@Param('attachmentId') attachmentId: string, @CurrentUser() user: any) {
+    return this.tasksService.markSentToSalesEnablement(attachmentId, user.id);
+  }
 }

@@ -5,6 +5,10 @@ import { tasksApi } from '../api/tasks';
 import { useUsers } from '../hooks/useUsers';
 import { useRole } from '../hooks/useRole';
 import { useAuth } from '../context/AuthContext';
+import SalesEnablementModal from './SalesEnablementModal';
+
+const SALES_ENABLEMENT_URL =
+  'https://sheets.positivepromotions.com/#/nc/form/c488db93-da1d-4584-9b93-37e4e2772ab2';
 
 interface Props {
   task?: Task;
@@ -59,6 +63,10 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
 
   // Complete Task action
   const [completing, setCompleting] = useState(false);
+
+  // Sales Enablement
+  const [salesEnablementTarget, setSalesEnablementTarget] = useState<TaskAttachment | null>(null);
+  const [sendingSE, setSendingSE] = useState<string | null>(null);
 
   const isCurrentOwner = !!task && task.ownerId === authUser?.id;
   const canComplete = isEdit && task.status !== 'COMPLETED' && (isCurrentOwner || !isEmployee);
@@ -154,6 +162,23 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
     }
   };
 
+  const handleSalesEnablementConfirm = async () => {
+    if (!salesEnablementTarget) return;
+    const { id, filename } = salesEnablementTarget;
+    setSalesEnablementTarget(null);
+    setSendingSE(id);
+    try {
+      const updated = await tasksApi.markSentToSalesEnablement(id);
+      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+      window.open(SALES_ENABLEMENT_URL, '_blank', 'noopener,noreferrer');
+      toast.success(`"${filename}" sent to Sales Enablement.`);
+    } catch {
+      toast.error('Failed to record Sales Enablement submission.');
+    } finally {
+      setSendingSE(null);
+    }
+  };
+
   const handleDeleteAttachment = async (attachmentId: string) => {
     try {
       await tasksApi.deleteAttachment(attachmentId);
@@ -189,6 +214,14 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
             ×
           </button>
         </div>
+
+        {salesEnablementTarget && (
+          <SalesEnablementModal
+            filename={salesEnablementTarget.filename}
+            onConfirm={handleSalesEnablementConfirm}
+            onCancel={() => setSalesEnablementTarget(null)}
+          />
+        )}
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
@@ -289,29 +322,54 @@ export default function TaskFormModal({ task, campaignId, defaultDate, onClose, 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
                 {attachments.length > 0 && (
-                  <ul className="space-y-1 mb-2">
+                  <ul className="space-y-1.5 mb-2">
                     {attachments.map((a) => (
-                      <li key={a.id} className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-md px-3 py-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                        </svg>
-                        <a
-                          href={tasksApi.downloadAttachmentUrl(a.id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 truncate text-blue-600 hover:underline"
-                        >
-                          {a.filename}
-                        </a>
-                        <span className="text-gray-400 flex-shrink-0">{formatBytes(a.size)}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAttachment(a.id)}
-                          className="text-gray-300 hover:text-red-500 flex-shrink-0"
-                          aria-label="Delete attachment"
-                        >
-                          ×
-                        </button>
+                      <li key={a.id} className="flex flex-col gap-1 text-xs text-gray-600 bg-gray-50 rounded-md px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                          </svg>
+                          <a
+                            href={tasksApi.downloadAttachmentUrl(a.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 truncate text-blue-600 hover:underline"
+                          >
+                            {a.filename}
+                          </a>
+                          <span className="text-gray-400 flex-shrink-0">{formatBytes(a.size)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAttachment(a.id)}
+                            className="text-gray-300 hover:text-red-500 flex-shrink-0"
+                            aria-label="Delete attachment"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 pl-5">
+                          {a.sentToSalesEnablementAt ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-200">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Sent to Sales Enablement &middot; {new Date(a.sentToSalesEnablementAt).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={sendingSE === a.id}
+                              onClick={() => setSalesEnablementTarget(a)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-blue-300 text-blue-600 text-[10px] font-medium hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                              </svg>
+                              {sendingSE === a.id ? 'Sending…' : 'Send to Sales Enablement'}
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
