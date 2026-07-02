@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { effectiveRole } from '../common/utils/role.utils';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -77,6 +78,28 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id: targetId },
       data: { role },
+      select: SAFE_SELECT,
+    });
+  }
+
+  async updateManager(targetId: string, managerId: string | null) {
+    if (managerId !== null && managerId === targetId) {
+      throw new BadRequestException('A user cannot be assigned as their own manager.');
+    }
+    if (managerId) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: managerId },
+        select: { role: true },
+      });
+      if (!manager) throw new NotFoundException('Manager user not found.');
+      if (effectiveRole(manager.role) !== 'MANAGER') {
+        throw new BadRequestException('The assigned manager must have the MANAGER role.');
+      }
+    }
+    await this.findOne(targetId);
+    return this.prisma.user.update({
+      where: { id: targetId },
+      data: { managerId: managerId ?? null },
       select: SAFE_SELECT,
     });
   }

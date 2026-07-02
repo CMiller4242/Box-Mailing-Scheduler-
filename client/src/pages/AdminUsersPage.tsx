@@ -21,6 +21,7 @@ const ROLE_BADGE: Record<UserRole, string> = {
 
 interface RowState {
   role: UserRole;
+  managerId: string;   // '' means null/unassigned
   saving: boolean;
   saved: boolean;
 }
@@ -28,7 +29,7 @@ interface RowState {
 function errMsg(err: unknown, fallback: string): string {
   const msg = (err as { response?: { data?: { message?: string } } })
     ?.response?.data?.message;
-  return msg ?? fallback;
+  return typeof msg === 'string' ? msg : fallback;
 }
 
 export default function AdminUsersPage() {
@@ -39,7 +40,6 @@ export default function AdminUsersPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [rowState, setRowState]     = useState<Record<string, RowState>>({});
 
-  // Single confirm dialog for user deletion
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [deleting, setDeleting]         = useState(false);
 
@@ -49,7 +49,7 @@ export default function AdminUsersPage() {
         setUsers(data);
         const initial: Record<string, RowState> = {};
         for (const u of data) {
-          initial[u.id] = { role: u.role, saving: false, saved: false };
+          initial[u.id] = { role: u.role, managerId: u.managerId ?? '', saving: false, saved: false };
         }
         setRowState(initial);
       })
@@ -60,23 +60,35 @@ export default function AdminUsersPage() {
   const patchRow = (id: string, patch: Partial<RowState>) =>
     setRowState((s) => ({ ...s, [id]: { ...s[id], ...patch } }));
 
-  // ── Role update ────────────────────────────────────────────────────────────
-  const setRowRole = (id: string, role: UserRole) =>
-    patchRow(id, { role, saved: false });
-
-  const saveRole = async (user: User) => {
+  // ── Save (role + manager together if either changed) ──────────────────────
+  const saveRow = async (user: User) => {
     const state = rowState[user.id];
-    if (!state || state.role === user.role) return;
+    if (!state) return;
+
+    const roleChanged    = state.role !== user.role;
+    const managerChanged = state.managerId !== (user.managerId ?? '');
+    if (!roleChanged && !managerChanged) return;
+
     patchRow(user.id, { saving: true, saved: false });
     try {
-      const updated = await usersApi.updateRole(user.id, state.role);
+      const calls: Promise<User>[] = [];
+      if (roleChanged)    calls.push(usersApi.updateRole(user.id, state.role));
+      if (managerChanged) calls.push(usersApi.updateManager(user.id, state.managerId || null));
+
+      const results = await Promise.all(calls);
+      // Take the last result (both return the updated user; if both ran, the manager update is last)
+      const updated = results[results.length - 1];
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       patchRow(user.id, { saving: false, saved: true });
-      toast.success(`${user.firstName} ${user.lastName}'s role updated to ${state.role}`);
-      setTimeout(() => patchRow(user.id, { saved: false }), 2000);
+
+      const parts: string[] = [];
+      if (roleChanged)    parts.push(`role → ${state.role}`);
+      if (managerChanged) parts.push('manager updated');
+      toast.success(`${user.firstName} ${user.lastName}: ${parts.join(', ')}`);
+      setTimeout(() => patchRow(user.id, { saved: false }), 2500);
     } catch (err) {
       patchRow(user.id, { saving: false });
-      toast.error(errMsg(err, 'Failed to update role.'));
+      toast.error(errMsg(err, 'Failed to save changes.'));
     }
   };
 
@@ -97,12 +109,15 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Managers available for assignment — only users with MANAGER role
+  const managerOptions = users.filter((u) => u.role === 'MANAGER');
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
         <p className="text-sm text-gray-500 mt-1">
-          View, update roles, and delete users. Role changes take effect on next login.
+          Update roles, assign managers, and delete users. Role changes take effect on next login.
         </p>
       </div>
 
@@ -117,23 +132,24 @@ export default function AdminUsersPage() {
       )}
 
       {!loading && !fetchError && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Current Role</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Change Role</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Manager</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((u) => {
-                const state   = rowState[u.id];
-                const isSelf  = u.id === me?.id;
-                const isDirty = state && state.role !== u.role;
+                const state      = rowState[u.id];
+                const isSelf     = u.id === me?.id;
+                const isDirty    = state && (state.role !== u.role || state.managerId !== (u.managerId ?? ''));
+                const currentMgr = users.find((m) => m.id === u.managerId);
 
                 return (
                   <tr key={u.id} className={isSelf ? 'bg-blue-50/40' : ''}>
@@ -154,27 +170,47 @@ export default function AdminUsersPage() {
                     {/* Email */}
                     <td className="px-5 py-3.5 text-sm text-gray-500 whitespace-nowrap">{u.email}</td>
 
-                    {/* Current role badge */}
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_BADGE[u.role]}`}>
-                        {u.role}
-                      </span>
-                    </td>
-
                     {/* Role selector */}
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       {isSelf ? (
-                        <span className="text-xs text-gray-400 italic">Cannot change own role</span>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_BADGE[u.role]}`}>
+                          {u.role}
+                        </span>
                       ) : (
                         <select
                           value={state?.role ?? u.role}
-                          onChange={(e) => setRowRole(u.id, e.target.value as UserRole)}
+                          onChange={(e) => patchRow(u.id, { role: e.target.value as UserRole, saved: false })}
                           disabled={state?.saving}
                           className="border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                         >
                           {ROLE_OPTIONS.map(({ value, label }) => (
                             <option key={value} value={value}>{label}</option>
                           ))}
+                        </select>
+                      )}
+                    </td>
+
+                    {/* Manager selector */}
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      {isSelf ? (
+                        <span className="text-xs text-gray-400 italic">
+                          {currentMgr ? `${currentMgr.firstName} ${currentMgr.lastName}` : '—'}
+                        </span>
+                      ) : (
+                        <select
+                          value={state?.managerId ?? ''}
+                          onChange={(e) => patchRow(u.id, { managerId: e.target.value, saved: false })}
+                          disabled={state?.saving}
+                          className="border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 max-w-[160px]"
+                        >
+                          <option value="">— None —</option>
+                          {managerOptions
+                            .filter((m) => m.id !== u.id)
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.firstName} {m.lastName}
+                              </option>
+                            ))}
                         </select>
                       )}
                     </td>
@@ -186,14 +222,14 @@ export default function AdminUsersPage() {
                       ) : (
                         <button
                           onClick={() => setDeleteTarget(u)}
-                          className="px-2.5 py-1 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="px-2.5 py-1 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-40 transition-colors"
                         >
                           Delete
                         </button>
                       )}
                     </td>
 
-                    {/* Save role button + feedback */}
+                    {/* Save */}
                     <td className="px-5 py-3.5 whitespace-nowrap text-right">
                       {!isSelf && (
                         <div className="flex items-center justify-end gap-3">
@@ -201,7 +237,7 @@ export default function AdminUsersPage() {
                             <span className="text-xs text-green-600 font-medium">✓ Saved</span>
                           )}
                           <button
-                            onClick={() => saveRole(u)}
+                            onClick={() => saveRow(u)}
                             disabled={!isDirty || state?.saving}
                             className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
@@ -219,7 +255,6 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Single shared confirm dialog for user deletion */}
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Delete ${deleteTarget?.firstName} ${deleteTarget?.lastName}?`}
