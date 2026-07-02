@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { campaignsApi } from '../api/campaigns';
 import { useAuth } from '../context/AuthContext';
 import { useRole } from '../hooks/useRole';
+import { useUsers } from '../hooks/useUsers';
 import type { CampaignWithTasks, Task, TaskStatus } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
@@ -91,7 +92,9 @@ interface AccordionItemProps {
   accentBg: string;
   showCompleted: boolean;
   assignedToMe: boolean;
+  assignedToTeam: boolean;
   myId: string;
+  teamMemberIds: string[];
   canCreate: boolean;
   canDelete: boolean;
   onRefresh: () => void;
@@ -100,7 +103,7 @@ interface AccordionItemProps {
 
 function CampaignAccordionItem({
   campaign, accentBorder, accentBg,
-  showCompleted, assignedToMe, myId, canCreate, canDelete, onRefresh, onDeleteCampaign,
+  showCompleted, assignedToMe, assignedToTeam, myId, teamMemberIds, canCreate, canDelete, onRefresh, onDeleteCampaign,
 }: AccordionItemProps) {
   const [open, setOpen] = useState(campaign.status === 'ACTIVE');
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -108,7 +111,8 @@ function CampaignAccordionItem({
   const [deleting, setDeleting] = useState(false);
 
   let tasks = campaign.tasks;
-  if (assignedToMe) tasks = tasks.filter((t) => t.ownerId === myId);
+  if (assignedToMe)   tasks = tasks.filter((t) => t.ownerId === myId);
+  if (assignedToTeam) tasks = tasks.filter((t) => t.ownerId != null && teamMemberIds.includes(t.ownerId));
   if (!showCompleted) tasks = tasks.filter((t) => t.status !== 'COMPLETED');
   tasks = [...tasks].sort(
     (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
@@ -206,7 +210,7 @@ function CampaignAccordionItem({
         <div className="border-t border-gray-100">
           {tasks.length === 0 ? (
             <div className="text-center text-sm text-gray-400 py-6">
-              {assignedToMe ? 'No tasks assigned to you here.' : 'No tasks to show.'}
+              {assignedToMe ? 'No tasks assigned to you here.' : assignedToTeam ? 'No team tasks here.' : 'No tasks to show.'}
             </div>
           ) : (
             tasks.map((t) => (
@@ -245,12 +249,14 @@ function CampaignAccordionItem({
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { canCreateTask, canDeleteTask } = useRole();
+  const { canCreateTask, canDeleteTask, isManager } = useRole();
+  const allUsers = useUsers();
   const [campaigns, setCampaigns] = useState<CampaignWithTasks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [assignedToMe, setAssignedToMe] = useState(false);
+  const [assignedToTeam, setAssignedToTeam] = useState(false);
 
   // Delete campaign state
   const [deleteCampaignTarget, setDeleteCampaignTarget] = useState<CampaignWithTasks | null>(null);
@@ -286,14 +292,22 @@ export default function Dashboard() {
 
   const myId = user?.id ?? '';
 
-  // Filter: hide COMPLETED campaigns when "Show completed" is off.
-  // Filter: when "Assigned to me" is on, hide campaigns that have zero tasks owned by this user.
+  // Team member IDs for the "Assigned to Team" filter (managers only)
+  const teamMemberIds = isManager
+    ? allUsers.filter((u) => u.managerId === myId).map((u) => u.id)
+    : [];
+
   const visibleCampaigns = campaigns.filter((c) => {
     if (!showCompleted && c.status === 'COMPLETED') return false;
     if (assignedToMe) {
       const mine = c.tasks.filter((t) => t.ownerId === myId);
       const visibleMine = showCompleted ? mine : mine.filter((t) => t.status !== 'COMPLETED');
       return visibleMine.length > 0;
+    }
+    if (assignedToTeam) {
+      const teamTasks = c.tasks.filter((t) => t.ownerId != null && teamMemberIds.includes(t.ownerId));
+      const visibleTeam = showCompleted ? teamTasks : teamTasks.filter((t) => t.status !== 'COMPLETED');
+      return visibleTeam.length > 0;
     }
     return true;
   });
@@ -316,7 +330,7 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={() => setAssignedToMe((v) => !v)}
+            onClick={() => { setAssignedToMe((v) => !v); setAssignedToTeam(false); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
               assignedToMe
                 ? 'bg-blue-50 border-blue-300 text-blue-700'
@@ -325,12 +339,29 @@ export default function Dashboard() {
           >
             Assigned to me
           </button>
+
+          {isManager && (
+            <button
+              onClick={() => { setAssignedToTeam((v) => !v); setAssignedToMe(false); }}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                assignedToTeam
+                  ? 'bg-violet-50 border-violet-300 text-violet-700'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Assigned to team
+            </button>
+          )}
         </div>
       </div>
 
       {visibleCampaigns.length === 0 && (
         <div className="text-center py-20 text-gray-400">
-          {assignedToMe ? 'No campaigns with tasks assigned to you.' : 'No campaigns to display.'}
+          {assignedToMe
+            ? 'No campaigns with tasks assigned to you.'
+            : assignedToTeam
+              ? 'No campaigns with tasks assigned to your team.'
+              : 'No campaigns to display.'}
         </div>
       )}
 
@@ -345,7 +376,9 @@ export default function Dashboard() {
               accentBg={accent.bg}
               showCompleted={showCompleted}
               assignedToMe={assignedToMe}
+              assignedToTeam={assignedToTeam}
               myId={myId}
+              teamMemberIds={teamMemberIds}
               canCreate={canCreateTask}
               canDelete={canDeleteTask}
               onRefresh={load}

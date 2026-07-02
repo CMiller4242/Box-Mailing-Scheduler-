@@ -10,6 +10,7 @@ export interface User {
   lastName: string;
   email: string;
   role: UserRole;
+  managerId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

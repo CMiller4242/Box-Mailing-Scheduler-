@@ -4,6 +4,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { UpdateManagerDto } from './dto/update-manager.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -37,6 +38,13 @@ export class UsersController {
     @CurrentUser() caller: any,
   ) {
     return this.usersService.updateRole(id, dto.role, caller.id);
+  }
+
+  @Patch(':id/manager')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Assign or remove a manager for a user (ADMIN only)' })
+  updateManager(@Param('id') id: string, @Body() dto: UpdateManagerDto) {
+    return this.usersService.updateManager(id, dto.managerId ?? null);
   }
 
   @Delete(':id')
